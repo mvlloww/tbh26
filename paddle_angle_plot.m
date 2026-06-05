@@ -14,7 +14,9 @@
 %   b         — geometric bag overlap [0,1]
 %   L         — paddle length (radial, mm)
 %   w         — paddle width (mm)
-%   f_contact — fraction of paddle length compressing bag [0,1]
+%   L_contact — contact length from tip of paddle (mm)
+%   p_bag     — blood bag pressure (Pa)
+%   F_e       — bag elasticity force (N)
 
 clear; clc; close all;
 
@@ -74,6 +76,18 @@ Q_total = Q_LV + Q_RV;
 SV      = K_geom * alpha * pi/180 / 1000;          % mL
 CO      = 2 * SV * rpm_max / 1000;                 % L/min (both ventricles)
 
+%% Torque
+p_bag     = 16e3;                          % Blood bag pressure, Pa
+F_e       = 10;                            % Bag elasticity force, N
+A_contact = w * L_contact * 1e-6;          % Bag contact area, m²
+F_total   = p_bag * A_contact + F_e;       % Total resistive force, N  (constant)
+r_moment  = (L - L_contact/2) * 1e-3;     % Moment arm: midpoint of contact zone, m
+
+Tp_mag   = F_total * r_moment;             % N·m
+Tp_LV    = Tp_mag * double(lv_mask);       % N·m, positive during LV ejection
+Tp_RV    = Tp_mag * double(rv_mask);       % N·m, positive magnitude during RV ejection
+Tp_total = Tp_LV - Tp_RV;                 % signed: +LV, −RV
+
 %% Ejection window time segments (ms)
 lv_segs = [0,           T * phi_pk/360;
            T * d_LV,    T + T * phi_pk/360;
@@ -88,10 +102,10 @@ rv_col = [1.00 0.78 0.78];
 %% ================================================================
 %  Figure 1: Time-domain dynamics — two cycles
 %% ================================================================
-figure('Name','Biventricular Paddle Dynamics','Color','w','Position',[60 60 980 740]);
+figure('Name','Biventricular Paddle Dynamics','Color','w','Position',[60 60 980 1100]);
 
 % --- Subplot 1: Paddle angle ---
-ax1 = subplot(3,1,1);
+ax1 = subplot(5,1,1);
 hold on;
 for i = 1:size(lv_segs,1)
     xregion(lv_segs(i,1), lv_segs(i,2),'FaceColor',lv_col,'EdgeColor','none','FaceAlpha',0.75);
@@ -113,7 +127,7 @@ grid on; xlim([0 2*T*1000]); ylim([-alpha*1.3, alpha*1.3]);
 ax1.FontSize = 10;
 
 % --- Subplot 2: Angular velocity ---
-ax2 = subplot(3,1,2);
+ax2 = subplot(5,1,2);
 hold on;
 for i = 1:size(lv_segs,1)
     xregion(lv_segs(i,1), lv_segs(i,2),'FaceColor',lv_col,'EdgeColor','none','FaceAlpha',0.75);
@@ -132,7 +146,7 @@ grid on; xlim([0 2*T*1000]);
 ax2.FontSize = 10;
 
 % --- Subplot 3: Flow rate ---
-ax3 = subplot(3,1,3);
+ax3 = subplot(5,1,3);
 hold on;
 for i = 1:size(lv_segs,1)
     xregion(lv_segs(i,1), lv_segs(i,2),'FaceColor',lv_col,'EdgeColor','none','FaceAlpha',0.75);
@@ -153,7 +167,51 @@ legend({'LV flow','RV flow','Total'},'Location','northeast');
 grid on; xlim([0 2*T*1000]); ylim([0, max(Q_total)*1.25]);
 ax3.FontSize = 10;
 
-annotation('textbox',[0.72 0.01 0.26 0.25],'String',{
+% --- Subplot 4: Paddle torque ---
+ax4 = subplot(5,1,4);
+hold on;
+for i = 1:size(lv_segs,1)
+    xregion(lv_segs(i,1), lv_segs(i,2),'FaceColor',lv_col,'EdgeColor','none','FaceAlpha',0.75);
+end
+for i = 1:size(rv_segs,1)
+    xregion(rv_segs(i,1), rv_segs(i,2),'FaceColor',rv_col,'EdgeColor','none','FaceAlpha',0.75);
+end
+plot(t*1000,  Tp_LV,  'b-', 'LineWidth', 2);
+plot(t*1000, -Tp_RV,  'r-', 'LineWidth', 2);
+plot(t*1000,  Tp_total,'k--','LineWidth', 1.2);
+yline(0,'k:','LineWidth',0.8);
+xline(T*1000,  'k--','LineWidth',1);
+xline(2*T*1000,'k--','LineWidth',1);
+hold off;
+xlabel('Time (ms)'); ylabel('T_p (N·m)');
+title('Paddle Torque vs Time');
+legend({'LV load','RV load','Net'},'Location','northeast');
+grid on; xlim([0 2*T*1000]);
+ax4.FontSize = 10;
+
+% --- Subplot 5: F_total applied to paddle ---
+ax5 = subplot(5,1,5);
+hold on;
+for i = 1:size(lv_segs,1)
+    xregion(lv_segs(i,1), lv_segs(i,2),'FaceColor',lv_col,'EdgeColor','none','FaceAlpha',0.75);
+end
+for i = 1:size(rv_segs,1)
+    xregion(rv_segs(i,1), rv_segs(i,2),'FaceColor',rv_col,'EdgeColor','none','FaceAlpha',0.75);
+end
+plot(t*1000, F_total * double(lv_mask), 'b-', 'LineWidth', 2);
+plot(t*1000, F_total * double(rv_mask), 'r-', 'LineWidth', 2);
+yline(F_total,'k:','LineWidth',0.8,'Label',sprintf('F_{total} = %.1f N', F_total),'LabelHorizontalAlignment','left');
+yline(0,'k:','LineWidth',0.8);
+xline(T*1000,  'k--','LineWidth',1);
+xline(2*T*1000,'k--','LineWidth',1);
+hold off;
+xlabel('Time (ms)'); ylabel('F_{total} (N)');
+title('F_{total} Applied to Paddle vs Time');
+legend({'LV','RV'},'Location','northeast');
+grid on; xlim([0 2*T*1000]); ylim([0, F_total * 1.4]);
+ax5.FontSize = 10;
+
+annotation('textbox',[0.72 0.01 0.26 0.24],'String',{
     sprintf('x = %g mm  |  a = %g mm', x, a),
     sprintf('\\phi_{peak} = %.1f°  (arccos r,  NOT 90°)', phi_pk),
     sprintf('\\alpha = %.1f°  |  rpm = %.1f', alpha, rpm_max),
@@ -164,7 +222,10 @@ annotation('textbox',[0.72 0.01 0.26 0.25],'String',{
     sprintf('K = %.0f mm³/rad', K_geom),
     sprintf('SV = %.1f mL / ventricle', SV),
     sprintf('CO = %.2f L/min / ventricle', SV * rpm_max / 1000),
-    sprintf('CO = %.2f L/min (combined)', CO)}, ...
+    sprintf('CO = %.2f L/min (combined)', CO),
+    sprintf('─────────────────────'),
+    sprintf('p_{bag} = %g kPa  |  F_e = %g N', p_bag/1e3, F_e),
+    sprintf('F_{total} = %.1f N  |  T_p = %.3f N·m', F_total, Tp_mag)}, ...
     'FitBoxToText','on','BackgroundColor','w','EdgeColor',[.5 .5 .5],'FontSize',8.5);
 
 sgtitle('Crank-and-Slotted-Arm LVAD — Biventricular Paddle Dynamics', ...
@@ -234,4 +295,10 @@ fprintf('  Stroke volume/ventricle:  %.1f mL\n', SV);
 fprintf('  Peak LV flow:             %.1f mL/s\n', max(Q_LV));
 fprintf('  Peak RV flow:             %.1f mL/s\n', max(Q_RV));
 fprintf('  Combined cardiac output:  %.2f L/min\n', CO);
+fprintf('  ─────────────────────────────────────\n');
+fprintf('  Bag pressure:             %g kPa\n', p_bag/1e3);
+fprintf('  Elasticity force F_e:     %.0f N\n', F_e);
+fprintf('  F_total:                  %.1f N  (%.1f N pressure + %.1f N elastic)\n', F_total, p_bag*A_contact, F_e);
+fprintf('  Moment arm:               %.1f mm\n', r_moment*1000);
+fprintf('  Peak paddle torque T_p:   %.4f N·m\n', Tp_mag);
 fprintf('  Cycle period T:           %.2f ms\n', T*1000);

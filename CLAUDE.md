@@ -71,6 +71,11 @@ Peak angular velocity at neutral: LV ≈ 1271°/s, RV ≈ 451°/s.
 `L_contact` is measured **from the tip** of the paddle inward, not from the pivot.
 Contact zone: radius `(L - L_contact)` to `L`. This matters because tip contact produces more flow per mm than pivot-end contact (larger moment arm). `K_geom = w * (L² − (L − L_contact)²) / 2`.
 
+## Torque model
+`T_p = F_total × r_moment` where `F_total = p_bag × A_contact + F_e` (constant during ejection).
+`r_moment = L − L_contact/2` (midpoint of contact zone from pivot, in metres).
+`A_contact = w × L_contact` in m². Overlap b shifts torque onset via the existing ejection masks — no extra logic needed.
+
 ## `b` parameter footgun
 `b` is a **geometric** bag overlap fraction, not a time fraction of the cycle. It was previously misimplemented as `b*T` — don't repeat that mistake.
 
