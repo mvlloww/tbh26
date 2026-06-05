@@ -115,12 +115,11 @@ lv_col = [0.72 0.87 1.00];
 rv_col = [1.00 0.78 0.78];
 
 %% ================================================================
-%  Figure 1: Time-domain dynamics — two cycles
+%  Figure 1: Kinematics — two cycles
 %% ================================================================
-figure('Name','Biventricular Paddle Dynamics','Color','w','Position',[60 60 980 1500]);
+figure('Name','Biventricular Paddle Dynamics','Color','w','Position',[60 60 980 700]);
 
-% --- Subplot 1: Paddle angle ---
-ax1 = subplot(7,1,1);
+ax1 = subplot(3,1,1);
 hold on;
 for i = 1:size(lv_segs,1)
     xregion(lv_segs(i,1), lv_segs(i,2),'FaceColor',lv_col,'EdgeColor','none','FaceAlpha',0.75);
@@ -141,8 +140,7 @@ legend({'LV ejection','RV ejection','Paddle angle'},'Location','northeast');
 grid on; xlim([0 2*T*1000]); ylim([-alpha*1.3, alpha*1.3]);
 ax1.FontSize = 10;
 
-% --- Subplot 2: Angular velocity ---
-ax2 = subplot(7,1,2);
+ax2 = subplot(3,1,2);
 hold on;
 for i = 1:size(lv_segs,1)
     xregion(lv_segs(i,1), lv_segs(i,2),'FaceColor',lv_col,'EdgeColor','none','FaceAlpha',0.75);
@@ -160,8 +158,7 @@ title('Paddle Angular Velocity vs Time');
 grid on; xlim([0 2*T*1000]);
 ax2.FontSize = 10;
 
-% --- Subplot 3: Flow rate ---
-ax3 = subplot(7,1,3);
+ax3 = subplot(3,1,3);
 hold on;
 for i = 1:size(lv_segs,1)
     xregion(lv_segs(i,1), lv_segs(i,2),'FaceColor',lv_col,'EdgeColor','none','FaceAlpha',0.75);
@@ -182,30 +179,28 @@ legend({'LV flow','RV flow','Total'},'Location','northeast');
 grid on; xlim([0 2*T*1000]); ylim([0, max(Q_total)*1.25]);
 ax3.FontSize = 10;
 
-% --- Subplot 4: Paddle torque ---
-ax4 = subplot(7,1,4);
-hold on;
-for i = 1:size(lv_segs,1)
-    xregion(lv_segs(i,1), lv_segs(i,2),'FaceColor',lv_col,'EdgeColor','none','FaceAlpha',0.75);
-end
-for i = 1:size(rv_segs,1)
-    xregion(rv_segs(i,1), rv_segs(i,2),'FaceColor',rv_col,'EdgeColor','none','FaceAlpha',0.75);
-end
-plot(t*1000,  Tp_LV,  'b-', 'LineWidth', 2);
-plot(t*1000, -Tp_RV,  'r-', 'LineWidth', 2);
-plot(t*1000,  Tp_total,'k--','LineWidth', 1.2);
-yline(0,'k:','LineWidth',0.8);
-xline(T*1000,  'k--','LineWidth',1);
-xline(2*T*1000,'k--','LineWidth',1);
-hold off;
-xlabel('Time (ms)'); ylabel('T_p (N·m)');
-title('Paddle Torque vs Time');
-legend({'LV load','RV load','Net'},'Location','northeast');
-grid on; xlim([0 2*T*1000]);
-ax4.FontSize = 10;
+annotation('textbox',[0.72 0.35 0.26 0.28],'String',{
+    sprintf('x = %g mm  |  a = %g mm', x, a),
+    sprintf('\\phi_{peak} = %.1f°  (arccos r,  NOT 90°)', phi_pk),
+    sprintf('\\alpha = %.1f°  |  rpm = %.1f', alpha, rpm_max),
+    sprintf('Overlap b = %.2f  |  \\delta = %.1f°', b, delta),
+    sprintf('─────────────────────'),
+    sprintf('L = %g mm  |  w = %g mm', L, w),
+    sprintf('L_{contact} = %g mm from tip  (r: %.0f–%g mm)', L_contact, L-L_contact, L),
+    sprintf('SV = %.1f mL / ventricle', SV),
+    sprintf('CO = %.2f L/min / ventricle', SV * rpm_max / 1000),
+    sprintf('CO = %.2f L/min (combined)', CO)}, ...
+    'FitBoxToText','on','BackgroundColor','w','EdgeColor',[.5 .5 .5],'FontSize',8.5);
 
-% --- Subplot 5: F_total applied to paddle ---
-ax5 = subplot(7,1,5);
+sgtitle('Crank-and-Slotted-Arm LVAD — Kinematics', ...
+    'FontSize',12,'FontWeight','bold');
+
+%% ================================================================
+%  Figure 2: Forces & Torques — two cycles
+%% ================================================================
+figure('Name','LVAD Forces & Torques','Color','w','Position',[100 40 980 880]);
+
+ax4 = subplot(4,1,1);
 hold on;
 for i = 1:size(lv_segs,1)
     xregion(lv_segs(i,1), lv_segs(i,2),'FaceColor',lv_col,'EdgeColor','none','FaceAlpha',0.75);
@@ -217,17 +212,37 @@ plot(t*1000, F_total * double(lv_mask), 'b-', 'LineWidth', 2);
 plot(t*1000, F_total * double(rv_mask), 'r-', 'LineWidth', 2);
 yline(F_total,'k:','LineWidth',0.8,'Label',sprintf('F_{total} = %.1f N', F_total),'LabelHorizontalAlignment','left');
 yline(0,'k:','LineWidth',0.8);
-xline(T*1000,  'k--','LineWidth',1);
-xline(2*T*1000,'k--','LineWidth',1);
+xline(T*1000,  'k--','LineWidth',1,'Label','Cycle 2','LabelVerticalAlignment','bottom');
+xline(2*T*1000,'k--','LineWidth',1,'Label','End',    'LabelVerticalAlignment','bottom');
 hold off;
-xlabel('Time (ms)'); ylabel('F_{total} (N)');
+ylabel('F_{total} (N)');
 title('F_{total} Applied to Paddle vs Time');
 legend({'LV','RV'},'Location','northeast');
 grid on; xlim([0 2*T*1000]); ylim([0, F_total * 1.4]);
+ax4.FontSize = 10;
+
+ax5 = subplot(4,1,2);
+hold on;
+for i = 1:size(lv_segs,1)
+    xregion(lv_segs(i,1), lv_segs(i,2),'FaceColor',lv_col,'EdgeColor','none','FaceAlpha',0.75);
+end
+for i = 1:size(rv_segs,1)
+    xregion(rv_segs(i,1), rv_segs(i,2),'FaceColor',rv_col,'EdgeColor','none','FaceAlpha',0.75);
+end
+plot(t*1000,  Tp_LV,   'b-', 'LineWidth', 2);
+plot(t*1000, -Tp_RV,   'r-', 'LineWidth', 2);
+plot(t*1000,  Tp_total,'k--','LineWidth', 1.2);
+yline(0,'k:','LineWidth',0.8);
+xline(T*1000,  'k--','LineWidth',1);
+xline(2*T*1000,'k--','LineWidth',1);
+hold off;
+ylabel('T_p (N·m)');
+title('Paddle Torque vs Time');
+legend({'LV load','RV load','Net'},'Location','northeast');
+grid on; xlim([0 2*T*1000]);
 ax5.FontSize = 10;
 
-% --- Subplot 6: Gearbox torque ---
-ax6 = subplot(7,1,6);
+ax6 = subplot(4,1,3);
 hold on;
 for i = 1:size(lv_segs,1)
     xregion(lv_segs(i,1), lv_segs(i,2),'FaceColor',lv_col,'EdgeColor','none','FaceAlpha',0.75);
@@ -242,14 +257,13 @@ yline(0,'k:','LineWidth',0.8);
 xline(T*1000,  'k--','LineWidth',1);
 xline(2*T*1000,'k--','LineWidth',1);
 hold off;
-xlabel('Time (ms)'); ylabel('T_g (N·m)');
+ylabel('T_g (N·m)');
 title('Gearbox Output Torque vs Time');
 legend({'LV contribution','RV contribution','Total T_g'},'Location','northeast');
 grid on; xlim([0 2*T*1000]); ylim([0, max(Tg)*1.25]);
 ax6.FontSize = 10;
 
-% --- Subplot 7: Motor torque ---
-ax7 = subplot(7,1,7);
+ax7 = subplot(4,1,4);
 hold on;
 for i = 1:size(lv_segs,1)
     xregion(lv_segs(i,1), lv_segs(i,2),'FaceColor',lv_col,'EdgeColor','none','FaceAlpha',0.75);
@@ -267,33 +281,25 @@ title('Motor Torque vs Time');
 grid on; xlim([0 2*T*1000]); ylim([0, max(Tm)*1.25]);
 ax7.FontSize = 10;
 
-annotation('textbox',[0.72 0.01 0.26 0.24],'String',{
-    sprintf('x = %g mm  |  a = %g mm', x, a),
-    sprintf('\\phi_{peak} = %.1f°  (arccos r,  NOT 90°)', phi_pk),
-    sprintf('\\alpha = %.1f°  |  rpm = %.1f', alpha, rpm_max),
-    sprintf('Overlap b = %.2f  |  \\delta = %.1f°', b, delta),
-    sprintf('─────────────────────'),
-    sprintf('L = %g mm  |  w = %g mm', L, w),
-    sprintf('L_{contact} = %g mm from tip  (r: %.0f–%g mm)', L_contact, L-L_contact, L),
-    sprintf('K = %.0f mm³/rad', K_geom),
-    sprintf('SV = %.1f mL / ventricle', SV),
-    sprintf('CO = %.2f L/min / ventricle', SV * rpm_max / 1000),
-    sprintf('CO = %.2f L/min (combined)', CO),
-    sprintf('─────────────────────'),
+annotation('textbox',[0.72 0.01 0.26 0.30],'String',{
     sprintf('p_{bag} = %g kPa  |  F_e = %g N', p_bag/1e3, F_e),
-    sprintf('F_{total} = %.1f N  |  T_p = %.3f N·m', F_total, Tp_mag),
-    sprintf('T_{g,LV} = %.4f N·m  (= xT_p/(a-x))', max(Tg_LV)),
-    sprintf('T_{g,RV} = %.4f N·m  (= xT_p/(a+x))', max(Tg_RV)),
+    sprintf('A_{contact} = %.0f mm²', w*L_contact),
+    sprintf('F_{total} = %.1f N', F_total),
+    sprintf('r_{moment} = %.0f mm', r_moment*1000),
+    sprintf('T_{p} = %.3f N·m', Tp_mag),
+    sprintf('─────────────────────'),
+    sprintf('T_{g,LV} = %.4f N·m  (xT_p/(a-x))', max(Tg_LV)),
+    sprintf('T_{g,RV} = %.4f N·m  (xT_p/(a+x))', max(Tg_RV)),
     sprintf('─────────────────────'),
     sprintf('GR = %g  |  \\eta_{gb} = %.2f  |  \\eta_{mech} = %.2f', GR, e_gb, e_mech),
     sprintf('T_{m,peak} = %.5f N·m', max(Tm))}, ...
     'FitBoxToText','on','BackgroundColor','w','EdgeColor',[.5 .5 .5],'FontSize',8.5);
 
-sgtitle('Crank-and-Slotted-Arm LVAD — Biventricular Paddle Dynamics', ...
+sgtitle('Crank-and-Slotted-Arm LVAD — Forces & Torques', ...
     'FontSize',12,'FontWeight','bold');
 
 %% ================================================================
-%  Figure 2: Crank angle vs Paddle angle
+%  Figure 3: Crank angle vs Paddle angle
 %% ================================================================
 phi_deg   = linspace(0, 360, 1000);
 theta_phi = atand(x .* sind(phi_deg) ./ (a - x .* cosd(phi_deg)));
