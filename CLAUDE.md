@@ -85,6 +85,25 @@ Physical meaning: b = fraction of the standard stroke (θ=0 → α) that is pre-
 - `delta = arcsin(sin(b·α)/r)` is the crank angle for b·α of paddle rotation on return; delta > b·α due to quick-return
 - **RV peak crank angle = 360° − phi_pk ≈ 298.4°**, NOT 180°+phi_pk. Using 180°+phi_pk is a common mistake — the mechanism is asymmetric.
 
+## LV vs RV asymmetry
+Same stroke volume per ventricle, but different flow profiles due to quick-return:
+- LV ejection crank span ≈ phi_pk + delta + b·α (short, fast)
+- RV ejection crank span ≈ (360−phi_pk) − phi_RV_start (long, slow — ~81% longer for b=0.1)
+- Peak Q_LV / Peak Q_RV = (a+x)/(a−x) ≈ 2.82 (quick-return ratio)
+- Total CO per ventricle is equal; the asymmetry is in the flow *profile*, not volume
+
+## Gearbox torque full-cycle formula
+`T_g(φ) = T_p · x · (a·cos(φ) − x) / (a² − 2ax·cos(φ) + x²)` (virtual work derivation)
+- LV peak at φ=0: `T_g = x·T_p/(a−x)` (maximum — pin closest to pivot)
+- RV peak at φ=180°: `T_g = x·T_p/(a+x)` (smaller — pin farthest from pivot)
+- Zero at φ=phi_pk and φ=360−phi_pk (paddle momentarily stationary)
+
+## Power chain
+`omega_gb` = crank shaft speed = 2π·rpm_max/60 (NOT motor speed)
+`omega_motor = omega_gb × GR` (motor shaft, ~14,508 rpm at rpm_max=234)
+`P_mech = Tm × omega_motor` (mechanical power at motor shaft)
+`P_elec = P_mech / e_motor` (electrical input power)
+
 ## Files
 | File | Description |
 |------|-------------|
