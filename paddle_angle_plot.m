@@ -163,6 +163,7 @@ annotation('textbox',[0.72 0.01 0.26 0.25],'String',{
     sprintf('L_{contact} = %g mm from tip  (r: %.0f–%g mm)', L_contact, L-L_contact, L),
     sprintf('K = %.0f mm³/rad', K_geom),
     sprintf('SV = %.1f mL / ventricle', SV),
+    sprintf('CO = %.2f L/min / ventricle', SV * rpm_max / 1000),
     sprintf('CO = %.2f L/min (combined)', CO)}, ...
     'FitBoxToText','on','BackgroundColor','w','EdgeColor',[.5 .5 .5],'FontSize',8.5);
 
