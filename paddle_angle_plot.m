@@ -31,7 +31,7 @@ rpm_max = 234.0;
 T       = 60 / rpm_max;
 omega_gb = 2*pi / T;   % Crank shaft (gearbox output) angular velocity, rad/s
 
-b     = 0.9;                              % Geometric overlap [0, 1]
+b     = 0.95;                              % Geometric overlap [0, 1]
 delta = asind(sind(b * alpha) / r);
 
 phi_RV_start = 180 - delta - b*alpha;
@@ -363,16 +363,6 @@ grid on; xlim([0 360]); ylim([-alpha*1.3, alpha*1.3]);
 xticks(0:45:360);
 
 eject_deg = phi_pk + delta + b*alpha;
-annotation('textbox',[0.64 0.11 0.24 0.27],'String',{
-    sprintf('x = %g mm  |  a = %g mm', x, a),
-    sprintf('r = x/a = %.3f', r),
-    sprintf('\\alpha = %.1f°  (max paddle angle)', alpha),
-    sprintf('\\phi_{peak} = %.1f°  (NOT 90°)', phi_pk),
-    sprintf('Overlap b = %.2f  |  \\delta = %.1f°', b, delta),
-    sprintf('LV: 0° to %.1f°  + lead-in from %.1f°', phi_pk, phi_LV_start),
-    sprintf('RV: %.1f° to %.1f°', phi_RV_start, 180+phi_pk),
-    sprintf('Each ventricle: %.1f° = %.0f%% of cycle', eject_deg, eject_deg/360*100)}, ...
-    'FitBoxToText','on','BackgroundColor','w','EdgeColor',[.5 .5 .5],'FontSize',9);
 
 %% Console summary
 fprintf('=== Crank-and-Slotted-Arm LVAD ===\n');
