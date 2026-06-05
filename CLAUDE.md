@@ -79,6 +79,11 @@ Contact zone: radius `(L - L_contact)` to `L`. This matters because tip contact 
 ## `b` parameter footgun
 `b` is a **geometric** bag overlap fraction, not a time fraction of the cycle. It was previously misimplemented as `b*T` — don't repeat that mistake.
 
+Physical meaning: b = fraction of the standard stroke (θ=0 → α) that is pre-compressed at θ=0.
+- LV bag contacts paddle at θ = −b·α (on RV side); RV bag contacts at θ = +b·α
+- Actual stroke volume = K_geom · α · (1+b) · π/180 — NOT just K_geom · α · π/180
+- `delta = arcsin(sin(b·α)/r)` is the crank angle for b·α of paddle rotation on return; delta > b·α due to quick-return
+
 ## Files
 | File | Description |
 |------|-------------|

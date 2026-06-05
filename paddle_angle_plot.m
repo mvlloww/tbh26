@@ -31,7 +31,13 @@ rpm_max = 234.0;
 T       = 60 / rpm_max;
 omega_gb = 2*pi / T;   % Crank shaft (gearbox output) angular velocity, rad/s
 
-b     = 0.95;                              % Geometric overlap [0, 1]
+b     = 0.1;   % Bag overlap [0,1]: fraction of standard stroke (theta=0 -> alpha) pre-compressed at theta=0
+               % b=0: bags first contact paddle at theta=0 (no pre-compression at neutral)
+               % b=0.1: each bag is 10% of standard SV compressed when paddle is at neutral
+               % LV bag contacts at theta=-b*alpha; RV bag contacts at theta=+b*alpha
+
+% delta: crank angle (deg) swept on the RETURN side to cover b*alpha of paddle rotation
+% delta > b*alpha because the return stroke is slower (quick-return mechanism)
 delta = asind(sind(b * alpha) / r);
 
 phi_RV_start = 180 - delta - b*alpha;
@@ -72,8 +78,9 @@ Q_LV    = max(0,  dtheta_dt_rad) .* double(lv_mask) * K_geom / 1000;
 Q_RV    = max(0, -dtheta_dt_rad) .* double(rv_mask) * K_geom / 1000;
 Q_total = Q_LV + Q_RV;
 
-% Stroke volume per ventricle [mL] = K * integral(dtheta) = K * alpha_rad
-SV      = K_geom * alpha * pi/180 / 1000;          % mL
+% Stroke volume per ventricle [mL]:
+% Bag compressed from theta=-b*alpha to theta=+alpha → total sweep = (1+b)*alpha
+SV      = K_geom * alpha * (1+b) * pi/180 / 1000;  % mL
 CO      = 2 * SV * rpm_max / 1000;                 % L/min (both ventricles)
 
 %% Torque
