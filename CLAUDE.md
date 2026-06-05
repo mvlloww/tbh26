@@ -83,6 +83,7 @@ Physical meaning: b = fraction of the standard stroke (θ=0 → α) that is pre-
 - LV bag contacts paddle at θ = −b·α (on RV side); RV bag contacts at θ = +b·α
 - Actual stroke volume = K_geom · α · (1+b) · π/180 — NOT just K_geom · α · π/180
 - `delta = arcsin(sin(b·α)/r)` is the crank angle for b·α of paddle rotation on return; delta > b·α due to quick-return
+- **RV peak crank angle = 360° − phi_pk ≈ 298.4°**, NOT 180°+phi_pk. Using 180°+phi_pk is a common mistake — the mechanism is asymmetric.
 
 ## Files
 | File | Description |

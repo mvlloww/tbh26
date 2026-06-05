@@ -71,7 +71,7 @@ phi_deg_t = mod(phi * 180/pi, 360);
 
 % Ejection window masks
 lv_mask = (phi_deg_t >= phi_LV_start) | (phi_deg_t <= phi_pk);
-rv_mask = (phi_deg_t >= phi_RV_start) & (phi_deg_t <= 180 + phi_pk);
+rv_mask = (phi_deg_t >= phi_RV_start) & (phi_deg_t <= 360 - phi_pk);
 
 % Q [mL/s]: only compression direction, only during ejection window
 Q_LV    = max(0,  dtheta_dt_rad) .* double(lv_mask) * K_geom / 1000;
@@ -121,8 +121,8 @@ lv_segs = [0,           T * phi_pk/360;
            T * d_LV,    T + T * phi_pk/360;
            T + T*d_LV,  2*T              ] * 1000;
 
-rv_segs = [T * d_RV,    T * (180 + phi_pk)/360;
-           T + T*d_RV,  T + T*(180 + phi_pk)/360] * 1000;
+rv_segs = [T * d_RV,    T * (360 - phi_pk)/360;
+           T + T*d_RV,  T + T*(360 - phi_pk)/360] * 1000;
 
 lv_col = [0.72 0.87 1.00];
 rv_col = [1.00 0.78 0.78];
@@ -342,7 +342,7 @@ hold on;
 
 xregion(0,             phi_pk,       'FaceColor',lv_col,'EdgeColor','none','FaceAlpha',0.75);
 xregion(phi_LV_start,  360,          'FaceColor',lv_col,'EdgeColor','none','FaceAlpha',0.75);
-xregion(phi_RV_start,  180+phi_pk,   'FaceColor',rv_col,'EdgeColor','none','FaceAlpha',0.75);
+xregion(phi_RV_start,  360-phi_pk,   'FaceColor',rv_col,'EdgeColor','none','FaceAlpha',0.75);
 
 plot(phi_deg, theta_phi,'k-','LineWidth',2);
 
@@ -353,14 +353,14 @@ yline(0,'k:','LineWidth',0.8);
 xline(0,          'k--','LineWidth',1,'Label','0°',                        'LabelVerticalAlignment','bottom');
 xline(phi_pk,     'b:' ,'LineWidth',1,'Label',sprintf('%.1f°',phi_pk),     'LabelVerticalAlignment','bottom');
 xline(180,        'k--','LineWidth',1,'Label','180°',                       'LabelVerticalAlignment','bottom');
-xline(180+phi_pk, 'r:' ,'LineWidth',1,'Label',sprintf('%.1f°',180+phi_pk), 'LabelVerticalAlignment','bottom');
+xline(360-phi_pk, 'r:' ,'LineWidth',1,'Label',sprintf('%.1f°',360-phi_pk), 'LabelVerticalAlignment','bottom');
 xline(360,        'k--','LineWidth',1,'Label','360°',                       'LabelVerticalAlignment','bottom');
 
 xline(phi_RV_start,'r--','LineWidth',1,'Label',sprintf('RV start %.1f°',phi_RV_start),'LabelVerticalAlignment','top','LabelHorizontalAlignment','right');
 xline(phi_LV_start,'b--','LineWidth',1,'Label',sprintf('LV start %.1f°',phi_LV_start),'LabelVerticalAlignment','top','LabelHorizontalAlignment','right');
 
 plot(phi_pk,       alpha,'bs','MarkerFaceColor','b','MarkerSize',8);
-plot(180+phi_pk,  -alpha,'rs','MarkerFaceColor','r','MarkerSize',8);
+plot(360-phi_pk,  -alpha,'rs','MarkerFaceColor','r','MarkerSize',8);
 
 hold off;
 xlabel('Crank Angle (°)'); ylabel('Paddle Angle (°)');
