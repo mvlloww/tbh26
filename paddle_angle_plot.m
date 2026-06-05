@@ -97,6 +97,12 @@ Tg_LV    =  Tp_mag .* dtheta_dphi .* double(lv_mask);   % N·m, positive
 Tg_RV    = -Tp_mag .* dtheta_dphi .* double(rv_mask);   % N·m, positive
 Tg       = Tg_LV + Tg_RV;
 
+% Motor torque: T_m = T_g / (GR * e_gb * e_mech)
+GR     = 62;     % Gear ratio
+e_gb   = 0.74;   % Gearbox efficiency
+e_mech = 0.72;   % Mechanical efficiency (crank-and-slotted-arm linkage)
+Tm     = Tg / (GR * e_gb * e_mech);
+
 %% Ejection window time segments (ms)
 lv_segs = [0,           T * phi_pk/360;
            T * d_LV,    T + T * phi_pk/360;
@@ -111,10 +117,10 @@ rv_col = [1.00 0.78 0.78];
 %% ================================================================
 %  Figure 1: Time-domain dynamics — two cycles
 %% ================================================================
-figure('Name','Biventricular Paddle Dynamics','Color','w','Position',[60 60 980 1300]);
+figure('Name','Biventricular Paddle Dynamics','Color','w','Position',[60 60 980 1500]);
 
 % --- Subplot 1: Paddle angle ---
-ax1 = subplot(6,1,1);
+ax1 = subplot(7,1,1);
 hold on;
 for i = 1:size(lv_segs,1)
     xregion(lv_segs(i,1), lv_segs(i,2),'FaceColor',lv_col,'EdgeColor','none','FaceAlpha',0.75);
@@ -136,7 +142,7 @@ grid on; xlim([0 2*T*1000]); ylim([-alpha*1.3, alpha*1.3]);
 ax1.FontSize = 10;
 
 % --- Subplot 2: Angular velocity ---
-ax2 = subplot(6,1,2);
+ax2 = subplot(7,1,2);
 hold on;
 for i = 1:size(lv_segs,1)
     xregion(lv_segs(i,1), lv_segs(i,2),'FaceColor',lv_col,'EdgeColor','none','FaceAlpha',0.75);
@@ -155,7 +161,7 @@ grid on; xlim([0 2*T*1000]);
 ax2.FontSize = 10;
 
 % --- Subplot 3: Flow rate ---
-ax3 = subplot(6,1,3);
+ax3 = subplot(7,1,3);
 hold on;
 for i = 1:size(lv_segs,1)
     xregion(lv_segs(i,1), lv_segs(i,2),'FaceColor',lv_col,'EdgeColor','none','FaceAlpha',0.75);
@@ -177,7 +183,7 @@ grid on; xlim([0 2*T*1000]); ylim([0, max(Q_total)*1.25]);
 ax3.FontSize = 10;
 
 % --- Subplot 4: Paddle torque ---
-ax4 = subplot(6,1,4);
+ax4 = subplot(7,1,4);
 hold on;
 for i = 1:size(lv_segs,1)
     xregion(lv_segs(i,1), lv_segs(i,2),'FaceColor',lv_col,'EdgeColor','none','FaceAlpha',0.75);
@@ -199,7 +205,7 @@ grid on; xlim([0 2*T*1000]);
 ax4.FontSize = 10;
 
 % --- Subplot 5: F_total applied to paddle ---
-ax5 = subplot(6,1,5);
+ax5 = subplot(7,1,5);
 hold on;
 for i = 1:size(lv_segs,1)
     xregion(lv_segs(i,1), lv_segs(i,2),'FaceColor',lv_col,'EdgeColor','none','FaceAlpha',0.75);
@@ -221,7 +227,7 @@ grid on; xlim([0 2*T*1000]); ylim([0, F_total * 1.4]);
 ax5.FontSize = 10;
 
 % --- Subplot 6: Gearbox torque ---
-ax6 = subplot(6,1,6);
+ax6 = subplot(7,1,6);
 hold on;
 for i = 1:size(lv_segs,1)
     xregion(lv_segs(i,1), lv_segs(i,2),'FaceColor',lv_col,'EdgeColor','none','FaceAlpha',0.75);
@@ -242,6 +248,25 @@ legend({'LV contribution','RV contribution','Total T_g'},'Location','northeast')
 grid on; xlim([0 2*T*1000]); ylim([0, max(Tg)*1.25]);
 ax6.FontSize = 10;
 
+% --- Subplot 7: Motor torque ---
+ax7 = subplot(7,1,7);
+hold on;
+for i = 1:size(lv_segs,1)
+    xregion(lv_segs(i,1), lv_segs(i,2),'FaceColor',lv_col,'EdgeColor','none','FaceAlpha',0.75);
+end
+for i = 1:size(rv_segs,1)
+    xregion(rv_segs(i,1), rv_segs(i,2),'FaceColor',rv_col,'EdgeColor','none','FaceAlpha',0.75);
+end
+plot(t*1000, Tm,'k-','LineWidth',2);
+yline(0,'k:','LineWidth',0.8);
+xline(T*1000,  'k--','LineWidth',1);
+xline(2*T*1000,'k--','LineWidth',1);
+hold off;
+xlabel('Time (ms)'); ylabel('T_m (N·m)');
+title('Motor Torque vs Time');
+grid on; xlim([0 2*T*1000]); ylim([0, max(Tm)*1.25]);
+ax7.FontSize = 10;
+
 annotation('textbox',[0.72 0.01 0.26 0.24],'String',{
     sprintf('x = %g mm  |  a = %g mm', x, a),
     sprintf('\\phi_{peak} = %.1f°  (arccos r,  NOT 90°)', phi_pk),
@@ -258,7 +283,10 @@ annotation('textbox',[0.72 0.01 0.26 0.24],'String',{
     sprintf('p_{bag} = %g kPa  |  F_e = %g N', p_bag/1e3, F_e),
     sprintf('F_{total} = %.1f N  |  T_p = %.3f N·m', F_total, Tp_mag),
     sprintf('T_{g,LV} = %.4f N·m  (= xT_p/(a-x))', max(Tg_LV)),
-    sprintf('T_{g,RV} = %.4f N·m  (= xT_p/(a+x))', max(Tg_RV))}, ...
+    sprintf('T_{g,RV} = %.4f N·m  (= xT_p/(a+x))', max(Tg_RV)),
+    sprintf('─────────────────────'),
+    sprintf('GR = %g  |  \\eta_{gb} = %.2f  |  \\eta_{mech} = %.2f', GR, e_gb, e_mech),
+    sprintf('T_{m,peak} = %.5f N·m', max(Tm))}, ...
     'FitBoxToText','on','BackgroundColor','w','EdgeColor',[.5 .5 .5],'FontSize',8.5);
 
 sgtitle('Crank-and-Slotted-Arm LVAD — Biventricular Paddle Dynamics', ...
@@ -337,4 +365,7 @@ fprintf('  Peak paddle torque T_p:   %.4f N·m\n', Tp_mag);
 fprintf('  Peak T_g (LV, phi=0):    %.4f N·m  (= x*Tp/(a-x))\n', max(Tg_LV));
 fprintf('  Peak T_g (RV, phi=180):  %.4f N·m  (= x*Tp/(a+x))\n', max(Tg_RV));
 fprintf('  T_g ratio LV/RV:         %.2f  (= (a+x)/(a-x))\n', max(Tg_LV)/max(Tg_RV));
+fprintf('  ─────────────────────────────────────\n');
+fprintf('  GR = %g  |  e_gb = %.2f  |  e_mech = %.2f\n', GR, e_gb, e_mech);
+fprintf('  Peak motor torque T_m:   %.5f N·m\n', max(Tm));
 fprintf('  Cycle period T:           %.2f ms\n', T*1000);
