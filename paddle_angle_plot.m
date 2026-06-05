@@ -29,9 +29,9 @@ phi_pk = acosd(r);        % Crank angle at max deflection, deg  (≈ 61.6°)
 
 rpm_max = 234.0;
 T       = 60 / rpm_max;
-omega   = 2*pi / T;
+omega_gb = 2*pi / T;   % Crank shaft (gearbox output) angular velocity, rad/s
 
-b     = 0;                              % Geometric overlap [0, 1]
+b     = 0.9;                              % Geometric overlap [0, 1]
 delta = asind(sind(b * alpha) / r);
 
 phi_RV_start = 180 - delta - b*alpha;
@@ -50,11 +50,11 @@ K_geom = w * (L^2 - (L - L_contact)^2) / 2;   % dV/dtheta, mm³/rad
 %% Time vector (2 cycles)
 N   = 2000;
 t   = linspace(0, 2*T, N);
-phi = omega .* t;
+phi = omega_gb .* t;
 
 %% Kinematics
 theta     = atand(x .* sin(phi) ./ (a - x .* cos(phi)));
-dtheta_dt = rad2deg(omega .* x .* (a .* cos(phi) - x) ./ ...
+dtheta_dt = rad2deg(omega_gb .* x .* (a .* cos(phi) - x) ./ ...
             (a^2 - 2*a*x .* cos(phi) + x^2));
 
 %% Flow rate
@@ -89,19 +89,25 @@ Tp_RV    = Tp_mag * double(rv_mask);       % N·m, positive magnitude during RV 
 Tp_total = Tp_LV - Tp_RV;                 % signed: +LV, −RV
 
 % Gearbox torque: T_g = T_p * dtheta/dphi  (virtual work: T_g*dphi = T_p*dtheta)
-% dtheta/dphi = dtheta_dt_rad / omega
+% dtheta/dphi = dtheta_dt_rad / omega_gb
 % LV: motor overcomes +Tp_mag, T_g = Tp_mag * dtheta/dphi  (positive, peaks at phi=0)
 % RV: motor overcomes +Tp_mag in -theta direction, T_g = -Tp_mag * dtheta/dphi (positive, peaks at phi=180)
-dtheta_dphi = dtheta_dt_rad / omega;
+dtheta_dphi = dtheta_dt_rad / omega_gb;
 Tg_LV    =  Tp_mag .* dtheta_dphi .* double(lv_mask);   % N·m, positive
 Tg_RV    = -Tp_mag .* dtheta_dphi .* double(rv_mask);   % N·m, positive
 Tg       = Tg_LV + Tg_RV;
 
 % Motor torque: T_m = T_g / (GR * e_gb * e_mech)
-GR     = 62;     % Gear ratio
-e_gb   = 0.74;   % Gearbox efficiency
-e_mech = 0.72;   % Mechanical efficiency (crank-and-slotted-arm linkage)
-Tm     = Tg / (GR * e_gb * e_mech);
+GR      = 62;    % Gear ratio
+e_gb    = 0.74;  % Gearbox efficiency
+e_mech  = 0.72;  % Mechanical efficiency (crank-and-slotted-arm linkage)
+e_motor = 0.81;  % Motor efficiency (from datasheet)
+Tm      = Tg / (GR * e_gb * e_mech);
+
+% Power
+omega_motor = omega_gb * GR;               % Motor shaft speed, rad/s
+P_mech      = Tm .* omega_motor;           % Mechanical power at motor shaft, W
+P_elec      = P_mech / e_motor;            % Electrical input power, W
 
 %% Ejection window time segments (ms)
 lv_segs = [0,           T * phi_pk/360;
@@ -198,9 +204,9 @@ sgtitle('Crank-and-Slotted-Arm LVAD — Kinematics', ...
 %% ================================================================
 %  Figure 2: Forces & Torques — two cycles
 %% ================================================================
-figure('Name','LVAD Forces & Torques','Color','w','Position',[100 40 980 880]);
+figure('Name','LVAD Forces & Torques','Color','w','Position',[100 40 980 1050]);
 
-ax4 = subplot(4,1,1);
+ax4 = subplot(5,1,1);
 hold on;
 for i = 1:size(lv_segs,1)
     xregion(lv_segs(i,1), lv_segs(i,2),'FaceColor',lv_col,'EdgeColor','none','FaceAlpha',0.75);
@@ -221,7 +227,7 @@ legend({'LV','RV'},'Location','northeast');
 grid on; xlim([0 2*T*1000]); ylim([0, F_total * 1.4]);
 ax4.FontSize = 10;
 
-ax5 = subplot(4,1,2);
+ax5 = subplot(5,1,2);
 hold on;
 for i = 1:size(lv_segs,1)
     xregion(lv_segs(i,1), lv_segs(i,2),'FaceColor',lv_col,'EdgeColor','none','FaceAlpha',0.75);
@@ -242,7 +248,7 @@ legend({'LV load','RV load','Net'},'Location','northeast');
 grid on; xlim([0 2*T*1000]);
 ax5.FontSize = 10;
 
-ax6 = subplot(4,1,3);
+ax6 = subplot(5,1,3);
 hold on;
 for i = 1:size(lv_segs,1)
     xregion(lv_segs(i,1), lv_segs(i,2),'FaceColor',lv_col,'EdgeColor','none','FaceAlpha',0.75);
@@ -263,7 +269,7 @@ legend({'LV contribution','RV contribution','Total T_g'},'Location','northeast')
 grid on; xlim([0 2*T*1000]); ylim([0, max(Tg)*1.25]);
 ax6.FontSize = 10;
 
-ax7 = subplot(4,1,4);
+ax7 = subplot(5,1,4);
 hold on;
 for i = 1:size(lv_segs,1)
     xregion(lv_segs(i,1), lv_segs(i,2),'FaceColor',lv_col,'EdgeColor','none','FaceAlpha',0.75);
@@ -281,7 +287,25 @@ title('Motor Torque vs Time');
 grid on; xlim([0 2*T*1000]); ylim([0, max(Tm)*1.25]);
 ax7.FontSize = 10;
 
-annotation('textbox',[0.72 0.01 0.26 0.30],'String',{
+ax8 = subplot(5,1,5);
+hold on;
+for i = 1:size(lv_segs,1)
+    xregion(lv_segs(i,1), lv_segs(i,2),'FaceColor',lv_col,'EdgeColor','none','FaceAlpha',0.75);
+end
+for i = 1:size(rv_segs,1)
+    xregion(rv_segs(i,1), rv_segs(i,2),'FaceColor',rv_col,'EdgeColor','none','FaceAlpha',0.75);
+end
+plot(t*1000, P_elec,'k-','LineWidth',2);
+yline(0,'k:','LineWidth',0.8);
+xline(T*1000,  'k--','LineWidth',1);
+xline(2*T*1000,'k--','LineWidth',1);
+hold off;
+xlabel('Time (ms)'); ylabel('P_{elec} (W)');
+title('Electrical Input Power vs Time');
+grid on; xlim([0 2*T*1000]); ylim([0, max(P_elec)*1.25]);
+ax8.FontSize = 10;
+
+annotation('textbox',[0.72 0.01 0.26 0.32],'String',{
     sprintf('p_{bag} = %g kPa  |  F_e = %g N', p_bag/1e3, F_e),
     sprintf('A_{contact} = %.0f mm²', w*L_contact),
     sprintf('F_{total} = %.1f N', F_total),
@@ -292,7 +316,9 @@ annotation('textbox',[0.72 0.01 0.26 0.30],'String',{
     sprintf('T_{g,RV} = %.4f N·m  (xT_p/(a+x))', max(Tg_RV)),
     sprintf('─────────────────────'),
     sprintf('GR = %g  |  \\eta_{gb} = %.2f  |  \\eta_{mech} = %.2f', GR, e_gb, e_mech),
-    sprintf('T_{m,peak} = %.5f N·m', max(Tm))}, ...
+    sprintf('\\eta_{motor} = %.2f  |  T_{m,peak} = %.5f N·m', e_motor, max(Tm)),
+    sprintf('P_{mech,peak} = %.3f W', max(P_mech)),
+    sprintf('P_{elec,peak} = %.3f W', max(P_elec))}, ...
     'FitBoxToText','on','BackgroundColor','w','EdgeColor',[.5 .5 .5],'FontSize',8.5);
 
 sgtitle('Crank-and-Slotted-Arm LVAD — Forces & Torques', ...
@@ -372,6 +398,11 @@ fprintf('  Peak T_g (LV, phi=0):    %.4f N·m  (= x*Tp/(a-x))\n', max(Tg_LV));
 fprintf('  Peak T_g (RV, phi=180):  %.4f N·m  (= x*Tp/(a+x))\n', max(Tg_RV));
 fprintf('  T_g ratio LV/RV:         %.2f  (= (a+x)/(a-x))\n', max(Tg_LV)/max(Tg_RV));
 fprintf('  ─────────────────────────────────────\n');
-fprintf('  GR = %g  |  e_gb = %.2f  |  e_mech = %.2f\n', GR, e_gb, e_mech);
+fprintf('  GR = %g  |  e_gb = %.2f  |  e_mech = %.2f  |  e_motor = %.2f\n', GR, e_gb, e_mech, e_motor);
+fprintf('  omega_gb:                %.2f rad/s  (%g rpm crank)\n', omega_gb, rpm_max);
+fprintf('  omega_motor:             %.1f rad/s  (%.0f rpm motor)\n', omega_motor, omega_motor*60/(2*pi));
 fprintf('  Peak motor torque T_m:   %.5f N·m\n', max(Tm));
+fprintf('  Peak P_mech:             %.3f W\n', max(P_mech));
+fprintf('  Peak P_elec:             %.3f W\n', max(P_elec));
+fprintf('  Mean P_elec:             %.3f W\n', mean(P_elec));
 fprintf('  Cycle period T:           %.2f ms\n', T*1000);
