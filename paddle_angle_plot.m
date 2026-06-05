@@ -31,7 +31,7 @@ rpm_max = 234.0;
 T       = 60 / rpm_max;
 omega_gb = 2*pi / T;   % Crank shaft (gearbox output) angular velocity, rad/s
 
-b     = 0.6;   % Bag overlap [0,1]: fraction of standard stroke (theta=0 -> alpha) pre-compressed at theta=0
+b     = 0;   % Bag overlap [0,1]: fraction of standard stroke (theta=0 -> alpha) pre-compressed at theta=0
                % b=0: bags first contact paddle at theta=0 (no pre-compression at neutral)
                % b=0.1: each bag is 10% of standard SV compressed when paddle is at neutral
                % LV bag contacts at theta=-b*alpha; RV bag contacts at theta=+b*alpha
