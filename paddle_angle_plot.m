@@ -40,10 +40,10 @@ d_RV = phi_RV_start / 360;
 %% Paddle geometry — tune these
 L         = 40;     % Paddle length (radial extent from pivot), mm
 w         = 66;     % Paddle width (perpendicular to arm), mm
-f_contact = 0.7;    % Fraction of paddle length compressing bag [0, 1]
-%                     Contact zone: radius 0 -> f_contact*L from pivot
+L_contact = 20;     % Contact length from tip of paddle, mm  (0 < L_contact <= L)
+%                     Contact zone: radius (L - L_contact) -> L
 
-K_geom = w * (f_contact * L)^2 / 2;   % dV/dtheta, mm³/rad
+K_geom = w * (L^2 - (L - L_contact)^2) / 2;   % dV/dtheta, mm³/rad
 
 %% Time vector (2 cycles)
 N   = 2000;
@@ -160,7 +160,7 @@ annotation('textbox',[0.72 0.01 0.26 0.25],'String',{
     sprintf('Overlap b = %.2f  |  \\delta = %.1f°', b, delta),
     sprintf('─────────────────────'),
     sprintf('L = %g mm  |  w = %g mm', L, w),
-    sprintf('f_{contact} = %.2f  =>  contact = %.0f mm', f_contact, f_contact*L),
+    sprintf('L_{contact} = %g mm from tip  (r: %.0f–%g mm)', L_contact, L-L_contact, L),
     sprintf('K = %.0f mm³/rad', K_geom),
     sprintf('SV = %.1f mL / ventricle', SV),
     sprintf('CO = %.2f L/min (combined)', CO)}, ...
@@ -227,7 +227,7 @@ fprintf('  Quick-return ratio:       %.2f:1  ((a+x)/(a-x))\n', (a+x)/(a-x));
 fprintf('  Overlap b:                %.2f  |  delta = %.1f deg\n', b, delta);
 fprintf('  ─────────────────────────────────────\n');
 fprintf('  Paddle L = %g mm  |  w = %g mm\n', L, w);
-fprintf('  Contact fraction:         %.2f  (%.0f mm radial)\n', f_contact, f_contact*L);
+fprintf('  Contact from tip:         %.0f mm  (r: %.0f to %g mm)\n', L_contact, L-L_contact, L);
 fprintf('  K_geom:                   %.0f mm3/rad\n', K_geom);
 fprintf('  Stroke volume/ventricle:  %.1f mL\n', SV);
 fprintf('  Peak LV flow:             %.1f mL/s\n', max(Q_LV));

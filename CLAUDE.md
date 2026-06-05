@@ -67,6 +67,10 @@ The slot is radial (along the arm). The formula `arcsin(r*sin(phi))` is wrong fo
 `(a + x) / (a - x) = 31/11 ≈ 2.82` — LV stroke is 2.82× faster than RV.
 Peak angular velocity at neutral: LV ≈ 1271°/s, RV ≈ 451°/s.
 
+## Flow rate contact zone
+`L_contact` is measured **from the tip** of the paddle inward, not from the pivot.
+Contact zone: radius `(L - L_contact)` to `L`. This matters because tip contact produces more flow per mm than pivot-end contact (larger moment arm). `K_geom = w * (L² − (L − L_contact)²) / 2`.
+
 ## `b` parameter footgun
 `b` is a **geometric** bag overlap fraction, not a time fraction of the cycle. It was previously misimplemented as `b*T` — don't repeat that mistake.
 
