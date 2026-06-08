@@ -46,14 +46,15 @@ fig.CloseRequestFcn = @(~,~) closeFig();
 hCrankPath   = plot(ax, NaN, NaN, 'b:', 'LineWidth',1);
 hCrankArm    = plot(ax, NaN, NaN, 'b-', 'LineWidth',2);
 hNeutral     = plot(ax, NaN, NaN, 'k:', 'LineWidth',1);
+hSlot        = plot(ax, NaN, NaN, '-',  'Color',[0.4 0.8 0.4],'LineWidth',2);
 hPaddle      = plot(ax, NaN, NaN, 'k-', 'LineWidth',3);
 hContact     = plot(ax, NaN, NaN, 'r-', 'LineWidth',5);
 hFulcrum     = plot(ax, NaN, NaN, 'ko', 'MarkerFaceColor','k','MarkerSize',8);
 hCrankCentre = plot(ax, NaN, NaN, 'bo', 'MarkerFaceColor','b','MarkerSize',8);
 hPin         = plot(ax, NaN, NaN, 'ys', 'MarkerFaceColor','y','MarkerSize',8,'MarkerEdgeColor','b');
 
-legend(ax, [hPaddle, hContact, hCrankArm], ...
-    {'Paddle (pivot -> tip)','Bag contact zone','Crank arm'}, 'Location','southoutside');
+legend(ax, [hPaddle, hContact, hSlot, hCrankArm], ...
+    {'Paddle (pivot -> tip)','Bag contact zone','Pin slot','Crank arm'}, 'Location','southoutside');
 
 redraw();
 
@@ -125,21 +126,23 @@ redraw();
         P = [a - x*cos(phir), x*sin(phir)];   % crank pin, slides in radial slot
 
         theta  = atan2(P(2), P(1));           % paddle angle, rad — matches theta(phi)
-        dirv   = [cos(theta), sin(theta)];
-        tip    = F + L*dirv;
-        zoneIn = F + (L - Lc)*dirv;
+        slotv  = [cos(theta), sin(theta)];    % direction F -> P (slot side)
+        paddlev = -slotv;                     % paddle extends opposite to pin slot
+        tip    = F + L*paddlev;
+        zoneIn = F + (L - Lc)*paddlev;
 
         ang = linspace(0, 2*pi, 80);
         set(hCrankPath,   'XData', C(1)+x*cos(ang),   'YData', C(2)+x*sin(ang));
         set(hCrankArm,    'XData', [C(1) P(1)],       'YData', [C(2) P(2)]);
         set(hNeutral,     'XData', [F(1) C(1)],       'YData', [F(2) C(2)]);
+        set(hSlot,        'XData', [F(1) P(1)],       'YData', [F(2) P(2)]);
         set(hPaddle,      'XData', [F(1) tip(1)],     'YData', [F(2) tip(2)]);
         set(hContact,     'XData', [zoneIn(1) tip(1)],'YData', [zoneIn(2) tip(2)]);
         set(hFulcrum,     'XData', F(1), 'YData', F(2));
         set(hCrankCentre, 'XData', C(1), 'YData', C(2));
         set(hPin,         'XData', P(1), 'YData', P(2));
 
-        m = max(a + x, L) * 1.15;
+        m = max([a + x, L, abs(tip(1)), abs(tip(2))]) * 1.15;
         xlim(ax, [-m m]);
         ylim(ax, [-m m]);
     end

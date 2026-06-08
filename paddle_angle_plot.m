@@ -22,7 +22,7 @@ clear; clc; close all;
 
 %% Mechanism parameters
 x     = 10;               % Crank arm length, mm
-a     = 21;               % Crank centre to fulcrum distance, mm
+a     = 40;               % Crank centre to fulcrum distance, mm
 r     = x / a;
 alpha  = asind(r);        % Max paddle deflection, deg
 phi_pk = acosd(r);        % Crank angle at max deflection, deg  (≈ 61.6°)
