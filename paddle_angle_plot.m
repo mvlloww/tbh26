@@ -22,7 +22,7 @@ clear; clc; close all;
 
 %% Mechanism parameters
 x     = 10;               % Crank arm length, mm
-a     = 40;               % Crank centre to fulcrum distance, mm
+a     = 21;               % Crank centre to fulcrum distance, mm
 r     = x / a;
 alpha  = asind(r);        % Max paddle deflection, deg
 phi_pk = acosd(r);        % Crank angle at max deflection, deg  (≈ 61.6°)
@@ -31,17 +31,16 @@ rpm_max = 234.0;
 T       = 60 / rpm_max;
 omega_gb = 2*pi / T;   % Crank shaft (gearbox output) angular velocity, rad/s
 
-b     = 0;   % Bag overlap [0,1]: fraction of standard stroke (theta=0 -> alpha) pre-compressed at theta=0
-               % b=0: bags first contact paddle at theta=0 (no pre-compression at neutral)
-               % b=0.1: each bag is 10% of standard SV compressed when paddle is at neutral
-               % LV bag contacts at theta=-b*alpha; RV bag contacts at theta=+b*alpha
+b     = 0.45;   % Bag overlap [0,0.5]: fill at theta=0 is (1-b)*100%; b=0 -> 100%, b=0.5 -> 50%
+               % gamma = alpha*b/(1-b): paddle angle (deg) by which bag contact extends past neutral
+               % LV bag first contacts at theta=-gamma; RV bag first contacts at theta=+gamma
 
-% delta: crank angle (deg) swept on the RETURN side to cover b*alpha of paddle rotation
-% delta > b*alpha because the return stroke is slower (quick-return mechanism)
-delta = asind(sind(b * alpha) / r);
+% gamma: extension of bag contact past neutral (deg); fill at theta=0 = (1-b)
+gamma = alpha * b / (1 - b);
 
-phi_RV_start = 180 - delta - b*alpha;
-phi_LV_start = 360 - delta - b*alpha;
+asind_arg    = min(1, sind(gamma) / r);          % clamp to avoid NaN at b=0.5 (float round-trip)
+phi_RV_start = 180 - gamma - asind(asind_arg);
+phi_LV_start = 360 + gamma - asind(asind_arg);
 d_LV = phi_LV_start / 360;
 d_RV = phi_RV_start / 360;
 
@@ -80,7 +79,7 @@ Q_total = Q_LV + Q_RV;
 
 % Stroke volume per ventricle [mL]:
 % Bag compressed from theta=-b*alpha to theta=+alpha → total sweep = (1+b)*alpha
-SV      = K_geom * alpha * (1+b) * pi/180 / 1000;  % mL
+SV      = K_geom * alpha * pi/180 / (1000 * (1-b));  % mL
 CO      = 2 * SV * rpm_max / 1000;                 % L/min (both ventricles)
 
 %% Torque
@@ -196,7 +195,7 @@ annotation('textbox',[0.72 0.35 0.26 0.28],'String',{
     sprintf('x = %g mm  |  a = %g mm', x, a),
     sprintf('\\phi_{peak} = %.1f°  (arccos r,  NOT 90°)', phi_pk),
     sprintf('\\alpha = %.1f°  |  rpm = %.1f', alpha, rpm_max),
-    sprintf('Overlap b = %.2f  |  \\delta = %.1f°', b, delta),
+    sprintf('Overlap b = %.2f  |  \\gamma = %.1f°', b, gamma),
     sprintf('─────────────────────'),
     sprintf('L = %g mm  |  w = %g mm', L, w),
     sprintf('L_{contact} = %g mm from tip  (r: %.0f–%g mm)', L_contact, L-L_contact, L),
@@ -369,14 +368,14 @@ legend({'LV ejection','RV ejection','Paddle angle'},'Location','northeast');
 grid on; xlim([0 360]); ylim([-alpha*1.3, alpha*1.3]);
 xticks(0:45:360);
 
-eject_deg = phi_pk + delta + b*alpha;
+eject_deg = phi_pk + asind(asind_arg) - gamma;
 
 %% Console summary
 fprintf('=== Crank-and-Slotted-Arm LVAD ===\n');
 fprintf('  Max paddle angle:         +/-%.2f deg\n', alpha);
 fprintf('  Crank angle at max:       %.1f deg  (arccos(x/a), NOT 90)\n', phi_pk);
 fprintf('  Quick-return ratio:       %.2f:1  ((a+x)/(a-x))\n', (a+x)/(a-x));
-fprintf('  Overlap b:                %.2f  |  delta = %.1f deg\n', b, delta);
+fprintf('  Overlap b:                %.2f  |  gamma = %.1f deg\n', b, gamma);
 fprintf('  ─────────────────────────────────────\n');
 fprintf('  Paddle L = %g mm  |  w = %g mm\n', L, w);
 fprintf('  Contact from tip:         %.0f mm  (r: %.0f to %g mm)\n', L_contact, L-L_contact, L);

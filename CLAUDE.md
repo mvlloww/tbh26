@@ -76,13 +76,15 @@ Contact zone: radius `(L - L_contact)` to `L`. This matters because tip contact 
 `r_moment = L − L_contact/2` (midpoint of contact zone from pivot, in metres).
 `A_contact = w × L_contact` in m². Overlap b shifts torque onset via the existing ejection masks — no extra logic needed.
 
-## `b` parameter footgun
-`b` is a **geometric** bag overlap fraction, not a time fraction of the cycle. It was previously misimplemented as `b*T` — don't repeat that mistake.
+## `b` parameter
+`b` is a **geometric** bag overlap fraction in **[0, 0.5]**, not a time fraction. It was previously misimplemented as `b*T` — don't repeat that mistake.
 
-Physical meaning: b = fraction of the standard stroke (θ=0 → α) that is pre-compressed at θ=0.
-- LV bag contacts paddle at θ = −b·α (on RV side); RV bag contacts at θ = +b·α
-- Actual stroke volume = K_geom · α · (1+b) · π/180 — NOT just K_geom · α · π/180
-- `delta = arcsin(sin(b·α)/r)` is the crank angle for b·α of paddle rotation on return; delta > b·α due to quick-return
+Physical meaning: **fill at θ=0 = (1−b)×100%**. b=0 → both bags 100% full at neutral; b=0.5 → both at 50%.
+- `gamma = α·b/(1−b)` — contact extension angle (deg); bag first contacts paddle at θ = −γ for LV, +γ for RV
+- `phi_LV_start = 360 + γ − arcsin(sin(γ)/r)` — crank angle where θ = −γ on return stroke
+- `phi_RV_start = 180 − γ − arcsin(sin(γ)/r)` — symmetric for RV
+- Stroke volume = K_geom · α/(1−b) · π/180 — the sweep from −γ to +α
+- b = 0.5 is the maximum: γ = α, bags span the full ±α stroke; b > 0.5 is undefined (sin(γ)/r > 1)
 - **RV peak crank angle = 360° − phi_pk ≈ 298.4°**, NOT 180°+phi_pk. Using 180°+phi_pk is a common mistake — the mechanism is asymmetric.
 
 ## LV vs RV asymmetry
