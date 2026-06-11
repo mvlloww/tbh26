@@ -21,17 +21,17 @@
 clear; clc; close all;
 
 %% Mechanism parameters
-x     = 10;               % Crank arm length, mm
-a     = 21;               % Crank centre to fulcrum distance, mm
+x     = 11;               % Crank arm length, mm
+a     = 23;               % Crank centre to fulcrum distance, mm
 r     = x / a;
 alpha  = asind(r);        % Max paddle deflection, deg
 phi_pk = acosd(r);        % Crank angle at max deflection, deg  (≈ 61.6°)
 
-rpm_max = 234.0;
+rpm_max = 145;
 T       = 60 / rpm_max;
 omega_gb = 2*pi / T;   % Crank shaft (gearbox output) angular velocity, rad/s
 
-b     = 0.45;   % Bag overlap [0,0.5]: fill at theta=0 is (1-b)*100%; b=0 -> 100%, b=0.5 -> 50%
+b     = 0.5;   % Bag overlap [0,0.5]: fill at theta=0 is (1-b)*100%; b=0 -> 100%, b=0.5 -> 50%
                % gamma = alpha*b/(1-b): paddle angle (deg) by which bag contact extends past neutral
                % LV bag first contacts at theta=-gamma; RV bag first contacts at theta=+gamma
 
@@ -45,9 +45,9 @@ d_LV = phi_LV_start / 360;
 d_RV = phi_RV_start / 360;
 
 %% Paddle geometry — tune these
-L         = 40;     % Paddle length (radial extent from pivot), mm
-w         = 66;     % Paddle width (perpendicular to arm), mm
-L_contact = 20;     % Contact length from tip of paddle, mm  (0 < L_contact <= L)
+L         = 30;     % Paddle length (radial extent from pivot), mm
+w         = 80;     % Paddle width (perpendicular to arm), mm
+L_contact = 25;     % Contact length from tip of paddle, mm  (0 < L_contact <= L)
 %                     Contact zone: radius (L - L_contact) -> L
 
 K_geom = w * (L^2 - (L - L_contact)^2) / 2;   % dV/dtheta, mm³/rad
@@ -105,9 +105,9 @@ Tg       = Tg_LV + Tg_RV;
 
 % Motor torque: T_m = T_g / (GR * e_gb * e_mech)
 GR      = 62;    % Gear ratio
-e_gb    = 0.74;  % Gearbox efficiency
+e_gb    = 0.90;  % Gearbox efficiency
 e_mech  = 0.72;  % Mechanical efficiency (crank-and-slotted-arm linkage)
-e_motor = 0.81;  % Motor efficiency (from datasheet)
+e_motor = 0.83;  % Motor efficiency (from datasheet)
 Tm      = Tg / (GR * e_gb * e_mech);
 
 % Power
