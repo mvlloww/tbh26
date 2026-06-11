@@ -110,6 +110,7 @@ Same stroke volume per ventricle, but different flow profiles due to quick-retur
 | File | Description |
 |------|-------------|
 | `paddle_angle_plot.m` | Main kinematic + flow rate plots (2 figures) |
+| `paddle_optimise.m` | Optimises x,a,L,w,L_contact for CO/power targets |
 | `tbh26_mechanism_v1.m` | Mechanism design analysis |
 | `appendix_d_ejection_calc.m` | Ejection calculations (Appendix D) |
 | `tbh27_mechanism_archived.m` | Previous iteration, archived |
