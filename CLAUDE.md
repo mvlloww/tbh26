@@ -106,10 +106,68 @@ Same stroke volume per ventricle, but different flow profiles due to quick-retur
 `P_mech = Tm × omega_motor` (mechanical power at motor shaft)
 `P_elec = P_mech / e_motor` (electrical input power)
 
+## Teardrop slot variant (paddle_angle_teardrop.m, exploratory)
+New file reshapes the **near-pivot end** of the radial slot from a sharp point
+into a teardrop (rounded arc of radius `r1`, tangent to the two straight sides)
+to reduce the quick-return ratio. Kinematics + flow rate only — torque/power
+chain not yet ported.
+
+Geometry (centreline = original slot axis through O4):
+- `y = a − x` — bottom of the r1-circle, distance from O4
+- `c = y + r1` — r1-circle centre, distance from O4
+- apex sits at `a + x` from O4 (teardrop span `z = 2x`, motor centre O2 at the
+  midpoint of `z`)
+- `y = a − x` (⟺ `a = y + x`) is required for continuity — it's what makes
+  `theta(0) = theta(180) = 0` hold, same as the straight slot. (Without it the
+  geometry is over-constrained.)
+
+`R(phi) = sqrt(a² + x² − 2ax·cos(phi))` (pure crank fact, unchanged by slot shape):
+- `R ≤ R_T` → pin rides the **r1 arc** → `theta = theta_orig − beta(arc)`
+- `R > R_T` → pin rides the **tangent line** → `theta = theta_orig − beta(tan)`
+- `beta` = angle of P off the centreline in the body frame (two-circle
+  intersection for the arc branch, quadratic tangent-point solve for the line
+  branch — see `teardrop_theta()`)
+- `R_T` = distance O4→tangent point between the r1-circle and the line from the apex
+- Valid range: `0 < r1 < x`. `r1 → 0` recovers the original straight-slot
+  `theta(phi)` exactly; `r1 → x` degenerates to a full circle (no straight side)
+
+**Anti-symmetry is preserved**: `theta(360−phi) = −theta(phi)` still holds for
+any `r1`, so `theta_min = −alpha_new` at `phi = 360 − phipk_new`, and the
+existing stroke-volume formula `SV = K_geom·α/(1−b)·π/180` carries over
+unchanged — just substitute `alpha_new`.
+
+**The closed-form `gamma`/`phi_LV_start`/`phi_RV_start` formulas above are
+specific to the original `theta(phi)` and don't generalise.** The teardrop
+file finds them numerically by inverting `theta(phi)` — see
+`ejection_windows()` / `solve_phi_for_theta()`. (Verified to reproduce the
+closed-form result at `b=0.5`, where `gamma=alpha` and both windows collapse
+to `phipk`/`360−phipk`.)
+
+### r1 sweep results (current x=7.6mm, a=22.4mm, b=0.5)
+| r1 | α (deg) | QR ratio | SV (mL) | CO (L/min) |
+|---|---|---|---|---|
+| original | 19.83 | 2.03 | 34.27 | 9.94 |
+| 0.2x (1.52mm) | 17.36 | 1.49 | 30.00 | 8.70 |
+| 0.4x (3.04mm) | 14.73 | 1.15 | 25.46 | 7.38 |
+| 0.6x (4.56mm) | 11.80 | 0.89 | 20.39 | 5.91 |
+| 0.8x (6.08mm) | 8.20 | 0.69 | 14.16 | 4.11 |
+
+- `r1` is a strong lever: even `r1=0.2x` cuts the QR ratio by ~26% but costs
+  ~12% of α/SV/CO (SV scales linearly with α).
+- QR ratio **inverts around r1≈0.5x** — past that point the φ≈0 (LV) side
+  becomes the *slower* side, swapping which ventricle gets the quick stroke.
+- Not yet done: re-tuning `x`/`a` alongside `r1` to recover α/SV/CO while
+  keeping the QR reduction.
+
+Note: the `(a+x)/(a−x) ≈ 2.82` / `phi_pk ≈ 61.6°` figures in the
+"Quick-return ratio" section above reflect an **earlier x,a** than the
+current `x=7.6, a=22.4` (which give QR≈2.03, phi_pk≈70.2°, α≈19.83°).
+
 ## Files
 | File | Description |
 |------|-------------|
 | `paddle_angle_plot.m` | Main kinematic + flow rate plots (2 figures) |
+| `paddle_angle_teardrop.m` | Teardrop-slot variant: kinematics + flow rate, r1 sweep (exploratory) |
 | `paddle_optimise.m` | Optimises x,a,L,w,L_contact for CO/power targets |
 | `tbh26_mechanism_v1.m` | Mechanism design analysis |
 | `appendix_d_ejection_calc.m` | Ejection calculations (Appendix D) |
