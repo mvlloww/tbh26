@@ -21,8 +21,8 @@
 clear; clc; close all;
 
 %% Mechanism parameters
-x     = 11;               % Crank arm length, mm
-a     = 23;               % Crank centre to fulcrum distance, mm
+x     = 7.6;               % Crank arm length, mm
+a     = 22.4;               % Crank centre to fulcrum distance, mm
 r     = x / a;
 alpha  = asind(r);        % Max paddle deflection, deg
 phi_pk = acosd(r);        % Crank angle at max deflection, deg  (≈ 61.6°)
@@ -45,9 +45,9 @@ d_LV = phi_LV_start / 360;
 d_RV = phi_RV_start / 360;
 
 %% Paddle geometry — tune these
-L         = 30;     % Paddle length (radial extent from pivot), mm
-w         = 80;     % Paddle width (perpendicular to arm), mm
-L_contact = 25;     % Contact length from tip of paddle, mm  (0 < L_contact <= L)
+L         = 31.5;     % Paddle length (radial extent from pivot), mm
+w         = 100;     % Paddle width (perpendicular to arm), mm
+L_contact = 30;     % Contact length from tip of paddle, mm  (0 < L_contact <= L)
 %                     Contact zone: radius (L - L_contact) -> L
 
 K_geom = w * (L^2 - (L - L_contact)^2) / 2;   % dV/dtheta, mm³/rad

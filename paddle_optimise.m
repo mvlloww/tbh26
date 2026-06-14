@@ -29,7 +29,7 @@ alpha_min = 20;      % deg, paddle swing floor
 %% Design vector v = [x, a, L, w, L_contact]  (mm)
 v0 = [10, 20, 30, 66, 20];
 lb = [ 5, 10, 15, 33,  5];
-ub = [20, 40, 60, 132, 30];
+ub = [20, 40, 60, 75, 30];
 
 % Linear inequalities A*v <= bb:  x - a <= -1 (x < a),  L_contact - L <= 0
 A  = [1 -1  0 0 0;
