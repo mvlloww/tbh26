@@ -249,8 +249,13 @@ redraw();
             dsc = max(0, Bc^2 - 4*Ac*Cc);
             t1  = (-Bc + sqrt(dsc)) / (2*Ac);
             t2  = (-Bc - sqrt(dsc)) / (2*Ac);
-            t   = t1;
-            if t < 0 || t > 1,  t = t2;  end
+            t  = t1;
+            if t < 0 || t > 1
+                d1 = max(0, t1-1) + max(0, -t1);
+                d2 = max(0, t2-1) + max(0, -t2);
+                if d2 < d1, t = t2; end
+            end
+            t   = max(0, min(1, t));
             Xp  = Txi*(1-t);
             Yp  = Tyi + t*(Ay-Tyi);
             beta = atan2d(sgn*Xp, Yp);

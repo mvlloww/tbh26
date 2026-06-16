@@ -235,7 +235,12 @@ function theta = teardrop_theta(phi_deg, x, a, r1)
     disc   = max(0, B_coef^2 - 4*A_coef*C_coef);
     t1 = (-B_coef + sqrt(disc)) / (2*A_coef);
     t2 = (-B_coef - sqrt(disc)) / (2*A_coef);
-    t  = t1;  t(t<0 | t>1) = t2(t<0 | t>1);
+    t   = t1;
+    bad = t < 0 | t > 1;
+    d1  = max(0, t1-1) + max(0, -t1);
+    d2  = max(0, t2-1) + max(0, -t2);
+    t(bad & d2 < d1) = t2(bad & d2 < d1);
+    t   = max(min(t, 1), 0);
     Xp = Tx*(1-t);
     Yp = Ty + t.*(Ay-Ty);
     beta(m) = atan2d(sgn(m).*Xp, Yp);
