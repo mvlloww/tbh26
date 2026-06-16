@@ -12,11 +12,11 @@ function paddle_mechanism_teardrop_viz
 % the pin rides the arc (near phi = 0 / 360).
 
 %% Default parameters  (match paddle_angle_teardrop.m)
-x0   = 7.6;
-a0   = 22.4;
+x0   = 9.9;
+a0   = 28;
 r1_0 = round(0.2 * x0, 2);   % 1.52 mm
-L0   = 31.5;
-Lc0  = 30.0;
+L0   = 40;
+Lc0  = 35;
 b0   = 0.5;
 phi  = 0;
 

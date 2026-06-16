@@ -25,8 +25,8 @@
 clear; clc; close all;
 
 %% Mechanism parameters (unchanged from paddle_angle_plot.m)
-x = 7.6;     % Crank arm length, mm
-a = 22.4;    % Crank centre to fulcrum distance, mm
+x = 9.9;     % Crank arm length, mm
+a = 28;    % Crank centre to fulcrum distance, mm
 r = x/a;
 alpha  = asind(r);
 phi_pk = acosd(r);
@@ -63,9 +63,9 @@ rpm_max = 145;
 T       = 60 / rpm_max;
 omega_gb = 2*pi / T;
 
-L         = 31.5;
-w         = 100;
-L_contact = 30;
+L         = 40;
+w         = 80;
+L_contact = 35;
 K_geom    = w * (L^2 - (L-L_contact)^2) / 2;
 
 %% Ejection windows & stroke volume — original
