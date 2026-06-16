@@ -146,6 +146,51 @@ end
 xlabel('Time (ms)'); ylabel('Q_{RV} (mL/s)'); title('RV Flow Rate — one cycle');
 grid on; xlim([0 T*1000]);
 
+%% Figure: Slot geometry (body frame)
+% Plots the teardrop outline in the arm's own frame: X' (perpendicular to
+% arm) vs Y' (along arm from pivot O4). The original straight slot is a
+% centreline only; each r1 adds a rounded bottom with two tangent walls.
+figure('Name','Teardrop Slot — Slot Geometry','Color','w','Position',[160 160 420 600]);
+hold on;
+
+% Original straight slot: centreline from y=a-x to apex at a+x
+plot([0 0], [a-x, a+x], 'k-', 'LineWidth', 2);
+
+for i = 1:numel(r1_vals)
+    r1i = r1_vals(i);
+    ci  = (a - x) + r1i;          % r1 circle centre along Y'
+    Di  = 2*x - r1i;              % apex-to-circle-centre distance
+    Txi = r1i * sqrt(Di^2 - r1i^2) / Di;   % tangent point X'
+    Tyi = ci + r1i^2 / Di;                  % tangent point Y'
+
+    % Arc: right tangent point → bottom (0, a-x) → left tangent, clockwise
+    theta_R = atan2(Tyi - ci, Txi);         % angle of right tangent from circle centre
+    arc_ang = linspace(theta_R, -pi - theta_R, 300);
+    arc_X   = r1i * cos(arc_ang);
+    arc_Y   = ci  + r1i * sin(arc_ang);
+
+    % Outline: apex → right wall → arc → left wall → apex
+    outline_X = [0,   Txi, arc_X, -Txi, 0  ];
+    outline_Y = [a+x, Tyi, arc_Y,  Tyi, a+x];
+
+    plot(outline_X, outline_Y, '--', 'Color', cmap(i,:), 'LineWidth', 1.5);
+end
+
+% Annotations
+plot(0, 0, 'k+', 'MarkerSize', 10, 'LineWidth', 2, 'HandleVisibility', 'off');
+yline(a, 'k:', 'LineWidth', 0.8, 'HandleVisibility', 'off');
+text(x*0.15, 0.8,     'O_4 (pivot)',  'FontSize', 8);
+text(x*0.15, a + 0.8, 'O_2 (motor)', 'FontSize', 8);
+
+xlabel("X' — perpendicular to arm (mm)");
+ylabel("Y' — along arm from pivot O_4 (mm)");
+title('Slot geometry in body frame (r_1 sweep)');
+legend([{'original'}, arrayfun(@(v) sprintf('r1=%.2f mm',v), r1_vals,'UniformOutput',false)], ...
+    'Location','south','NumColumns',3);
+grid on; axis equal;
+xlim([-x*1.3, x*1.3]);
+ylim([a - x - 3, a + x + 3]);
+
 %% Console summary
 fprintf('=== Teardrop slot sweep (x=%.2f mm, a=%.2f mm, y=a-x=%.2f mm, b=%.2f) ===\n', x, a, a-x, b);
 fprintf('  Original:  alpha=%.2f deg @ phi=%.1f  |  QR ratio=%.2f  |  SV=%.2f mL  |  CO=%.2f L/min\n', ...
