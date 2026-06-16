@@ -64,8 +64,9 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 The slot is radial (along the arm). The formula `arcsin(r*sin(phi))` is wrong for this geometry — it only applies to a translating yoke. The correct formula is in the code header. Don't revert to arcsin.
 
 ## Quick-return ratio (not stated in code)
-`(a + x) / (a - x) = 31/11 ≈ 2.82` — LV stroke is 2.82× faster than RV.
-Peak angular velocity at neutral: LV ≈ 1271°/s, RV ≈ 451°/s.
+`(a + x) / (a - x)` — LV stroke is faster than RV by this ratio.
+Current params (x=9.9mm, a=28mm): QR ≈ 2.09 (straight slot), ~1.5 (teardrop r1=0.2x).
+Earlier params (x=7.6mm, a=22.4mm): QR ≈ 2.03.
 
 ## Flow rate contact zone
 `L_contact` is measured **from the tip** of the paddle inward, not from the pivot.
@@ -106,11 +107,11 @@ Same stroke volume per ventricle, but different flow profiles due to quick-retur
 `P_mech = Tm × omega_motor` (mechanical power at motor shaft)
 `P_elec = P_mech / e_motor` (electrical input power)
 
-## Teardrop slot variant (paddle_angle_teardrop.m, exploratory)
-New file reshapes the **near-pivot end** of the radial slot from a sharp point
-into a teardrop (rounded arc of radius `r1`, tangent to the two straight sides)
-to reduce the quick-return ratio. Kinematics + flow rate only — torque/power
-chain not yet ported.
+## Teardrop slot variant
+Reshapes the **near-pivot end** of the radial slot from a sharp point into a
+teardrop (rounded arc of radius `r1`, tangent to the two straight sides) to
+reduce the quick-return ratio. Full dynamics (kinematics, flow, torque, power)
+are implemented in `paddle_teardrop_plot.m`.
 
 Geometry (centreline = original slot axis through O4):
 - `y = a − x` — bottom of the r1-circle, distance from O4
@@ -143,7 +144,7 @@ file finds them numerically by inverting `theta(phi)` — see
 closed-form result at `b=0.5`, where `gamma=alpha` and both windows collapse
 to `phipk`/`360−phipk`.)
 
-### r1 sweep results (current x=7.6mm, a=22.4mm, b=0.5)
+### r1 sweep results (OLD params: x=7.6mm, a=22.4mm, b=0.5)
 | r1 | α (deg) | QR ratio | SV (mL) | CO (L/min) |
 |---|---|---|---|---|
 | original | 19.83 | 2.03 | 34.27 | 9.94 |
@@ -156,19 +157,50 @@ to `phipk`/`360−phipk`.)
   ~12% of α/SV/CO (SV scales linearly with α).
 - QR ratio **inverts around r1≈0.5x** — past that point the φ≈0 (LV) side
   becomes the *slower* side, swapping which ventricle gets the quick stroke.
+Current params (x=9.9mm, a=28mm, b=0.5, r1=1.98mm=0.2x): α≈18.1°, QR≈1.5.
+
+- `r1` is a strong lever: even `r1=0.2x` cuts the QR ratio by ~26% but costs
+  ~12% of α/SV/CO (SV scales linearly with α).
+- QR ratio **inverts around r1≈0.5x** — past that point the φ≈0 (LV) side
+  becomes the *slower* side, swapping which ventricle gets the quick stroke.
 - Not yet done: re-tuning `x`/`a` alongside `r1` to recover α/SV/CO while
   keeping the QR reduction.
 
-Note: the `(a+x)/(a−x) ≈ 2.82` / `phi_pk ≈ 61.6°` figures in the
-"Quick-return ratio" section above reflect an **earlier x,a** than the
-current `x=7.6, a=22.4` (which give QR≈2.03, phi_pk≈70.2°, α≈19.83°).
+### teardrop_theta() implementation pitfalls
+
+**Quadratic root selection at φ=180°**: at φ=180°, R=a+x exactly, so the
+correct tangent-line parameter is t=1 (pin at apex). Floating-point rounding
+can push t1 to 1+ε, which must NOT fall back to t2≈−(a+x)/(a−x) (wildly
+wrong). The correct selection:
+```matlab
+bad = t < 0 | t > 1;
+d1  = max(0, t1-1) + max(0, -t1);   % distance of t1 from [0,1]
+d2  = max(0, t2-1) + max(0, -t2);
+t(bad & d2 < d1) = t2(bad & d2 < d1);  % use t2 only if it is closer
+t   = max(min(t, 1), 0);               % clamp residual float error
+```
+Naively replacing t1→t2 then clamping gives t=0 (pin at tangent point,
+~5° error); not replacing at all and clamping gives t=1 (correct).
+
+**Units in the dynamics scripts**: `dth_dphi_t` from `gradient(theta, phi)` is
+deg/deg = rad/rad = dimensionless. Therefore:
+```matlab
+dtheta_dt_rad = dth_dphi_t * omega_gb;      % rad/s  — NO pi/180 needed
+dtheta_dt     = dtheta_dt_rad * (180/pi);   % °/s    — for display only
+```
+Applying `* pi/180` to `dth_dphi_t` before multiplying by `omega_gb` scales
+all dynamic quantities (dθ/dt, Q, Tg, Tm, P_elec) down by 57× — a previously
+present bug, now fixed in `paddle_teardrop_plot.m`.
 
 ## Files
 | File | Description |
 |------|-------------|
-| `paddle_angle_plot.m` | Main kinematic + flow rate plots (2 figures) |
-| `paddle_angle_teardrop.m` | Teardrop-slot variant: kinematics + flow rate, r1 sweep (exploratory) |
-| `paddle_optimise.m` | Optimises x,a,L,w,L_contact for CO/power targets |
+| `paddle_angle_plot.m` | Main kinematic + flow rate plots, straight slot (2 figures) |
+| `paddle_angle_teardrop.m` | Teardrop r1 sweep: kinematics + flow rate (exploratory) |
+| `paddle_teardrop_plot.m` | Full teardrop dynamics at a single r1: kinematics, flow, torque, power (2 figures) |
+| `paddle_teardrop_optimise.m` | Optimises x,a,r1,L,w,L_contact for CO/power targets (teardrop) |
+| `paddle_mechanism_teardrop_viz.m` | Interactive animation of the teardrop mechanism with sliders |
+| `paddle_optimise.m` | Optimises x,a,L,w,L_contact for CO/power targets (straight slot) |
 | `tbh26_mechanism_v1.m` | Mechanism design analysis |
 | `appendix_d_ejection_calc.m` | Ejection calculations (Appendix D) |
 | `tbh27_mechanism_archived.m` | Previous iteration, archived |
