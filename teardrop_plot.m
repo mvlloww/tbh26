@@ -6,7 +6,7 @@
 %
 % theta(phi) is computed numerically (no closed form for the teardrop).
 % Ejection windows are found by numerical inversion of theta(phi).
-% All torque/power formulas are otherwise identical to paddle_angle_plot.m.
+% All torque/powpower er formulas are otherwise identical to paddle_angle_plot.m.
 %
 % KEY PARAMETERS TO TUNE:
 %   r1        — teardrop arc radius (mm); 0 → straight slot, must be < x
