@@ -12,20 +12,36 @@ function paddle_mechanism_teardrop_viz
 % the pin rides the arc (near phi = 0 / 360).
 
 %% Default parameters  (match paddle_angle_teardrop.m)
-x0   = 9.9;
-a0   = 28;
-r1_0 = round(0.2 * x0, 2);   % 1.52 mm
-L0   = 40;
-Lc0  = 35;
+x0   = 5.4;
+a0   = 32;
+r1_0 = 1.6;   % 1.52 mm
+L0   = 57;
+Lc0  = 50;
 b0   = 0.5;
 phi  = 0;
 
+%% Physics for power overlay (w has no slider — fixed at analytical optimum)
+w_fixed  = 100;    % mm
+rpm_max  = 145;
+p_bag    = 16e3;   % Pa
+F_e      = 10;     % N
+e_gb     = 0.90;
+e_mech   = 0.72;
+e_motor  = 0.83;
+omega_gb = 2*pi*rpm_max/60;
+P_max    = 15.6;   % W budget
+
 %% UI
-fig = uifigure('Name','Teardrop Slot Mechanism','Position',[100 100 920 580]);
+fig = uifigure('Name','Teardrop Slot Mechanism','Position',[100 100 1280 580]);
 ax  = uiaxes(fig,'Position',[30 50 530 500]);
 hold(ax,'on'); grid(ax,'on'); axis(ax,'equal');
 xlabel(ax,'mm'); ylabel(ax,'mm');
 title(ax,'Crank-and-Slotted-Arm — Teardrop Slot Variant');
+
+ax2 = uiaxes(fig,'Position',[905 35 345 250]);
+hold(ax2,'on'); grid(ax2,'on');
+xlabel(ax2,'Time (ms)'); ylabel(ax2,'P_{elec} (W)');
+title(ax2,'Electrical Input Power');
 
 %% Sliders  (7 rows, 60 px apart)
 [lbl_x,   sld_x]   = mkSlider(580, 445, 'x',   [2   15],   x0);
@@ -72,6 +88,14 @@ legend(ax, [hPaddle, hCtact, hSlot, hCrank, hBagLV, hBagRV], ...
     {'Paddle (pivot\rightarrowtip)','Contact zone','Teardrop slot', ...
      'Crank arm','LV bag','RV bag'}, ...
     'Location','southoutside');
+
+T_pd0 = 60/rpm_max*1000;
+plot(ax2, [0 T_pd0], [P_max P_max], 'r--', 'LineWidth',1);
+text(ax2, T_pd0*0.03, P_max*1.08, sprintf('%.1f W budget',P_max), ...
+     'Color','r','FontSize',8);
+hPow    = plot(ax2, NaN, NaN, 'k-', 'LineWidth',1.5);
+hPowDot = plot(ax2, NaN, NaN, 'ro', 'MarkerFaceColor','r','MarkerSize',10, ...
+               'MarkerEdgeColor','k');
 
 redraw();
 
@@ -212,6 +236,23 @@ redraw();
         set(hBagRV, 'XData', rcen(1)+rrv*cos(ang60), 'YData', rcen(2)+rrv*asp*sin(ang60));
         set(hTxtLV, 'Position',[lcen(1) lcen(2) 0], 'String',sprintf('V = %.0f%%',fLV*100));
         set(hTxtRV, 'Position',[rcen(1) rcen(2) 0], 'String',sprintf('V = %.0f%%',fRV*100));
+
+        %% Power curve
+        phi_v  = (0:2:360)';
+        th_v   = arrayfun(@(p) td_theta(p, xv, av, r1v), phi_v);
+        dth_v  = gradient(th_v, phi_v) * omega_gb;      % rad/s (deg/deg dimensionless × rad/s)
+        LV_ej  = (th_v > -gd) & (dth_v > 0);
+        RV_ej  = (th_v <  gd) & (dth_v < 0);
+        Tp_v   = (p_bag * w_fixed*Lcv*1e-6 + F_e) * (Lv - Lcv/2)*1e-3;
+        P_v    = Tp_v * abs(dth_v) .* double(LV_ej | RV_ej) / (e_gb*e_mech*e_motor);
+        T_pd   = 60/rpm_max*1000;
+        t_v    = phi_v / 360 * T_pd;
+        t_now  = phi   / 360 * T_pd;
+        P_now  = interp1(phi_v, P_v, phi, 'linear', 0);
+        set(hPow,    'XData',t_v,   'YData',P_v);
+        set(hPowDot, 'XData',t_now, 'YData',P_now);
+        xlim(ax2, [0, T_pd]);
+        ylim(ax2, [0, max(max(P_v)*1.2, P_max*1.1)]);
 
         m = max([av+xv, Lv, norm(tip), bdist+rmb]) * 1.15;
         xlim(ax, [-m m]);  ylim(ax, [-m m]);

@@ -16,9 +16,9 @@
 clear; clc; close all;
 
 %% Mechanism parameters
-x   = 9.9;    % Crank arm length, mm
-a   = 28;     % Crank centre to fulcrum distance, mm
-r1  = 1.98;   % Teardrop arc radius, mm  (= 0.2x; set 0 for straight slot)
+x   = 5.4;    % Crank arm length, mm
+a   = 32.2;     % Crank centre to fulcrum distance, mm
+r1  = 1.6;   % Teardrop arc radius, mm  (= 0.2x; set 0 for straight slot)
 
 rpm_max  = 145;
 T        = 60 / rpm_max;
@@ -27,9 +27,9 @@ omega_gb = 2*pi / T;
 b = 0.5;   % Bag overlap [0, 0.5]: fill at theta=0 is (1-b)*100%
 
 %% Paddle geometry — tune these
-L         = 40;    % Paddle length (radial extent from pivot), mm
-w         = 80;    % Paddle width (perpendicular to arm), mm
-L_contact = 35;    % Contact length from tip of paddle, mm
+L         = 57.3;    % Paddle length (radial extent from pivot), mm
+w         = 75;    % Paddle width (perpendicular to arm), mm
+L_contact = 50;    % Contact length from tip of paddle, mm
 
 K_geom = w * (L^2 - (L - L_contact)^2) / 2;   % dV/dtheta, mm³/rad
 

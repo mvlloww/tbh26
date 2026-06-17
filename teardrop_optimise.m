@@ -1,7 +1,7 @@
 %% Teardrop Paddle / Mechanism Geometry Optimiser
 %
 % Finds x, a, f (=r1/x), L, w, L_contact that minimise P_elec_peak subject to:
-%   CO    in [0.95, 1.05] * CO_target  (±5% band, per ventricle)
+%   CO    in [0.98, 1.02] * CO_target  (±2% band, per ventricle)
 %   alpha >= alpha_min                 (teardrop paddle swing floor)
 %
 % The teardrop slot adds r1 = f*x as a free variable. Both alpha and the
@@ -30,15 +30,19 @@ e_motor = 0.83;
 omega_gb  = 2*pi*rpm_max/60;
 CO_target = 5;       % L/min per ventricle
 P_max     = 15.6;    % W power budget
-alpha_min = 12;      % deg — relaxed vs straight-slot (teardrop reduces alpha)
+alpha_min = 8;       % deg — floor for teardrop (≤8° pushes Lc to its 50mm bound)
 
 phi_deg = linspace(0, 360, 361);   % 1-deg resolution for numerical derivatives
 
 %% Design vector v = [x, a, f, L, w, L_contact]
 %   f = r1/x in [0, 0.9]: f=0 → straight slot, f→1 → full circle (invalid)
-v0 = [7.6, 22.4, 0.20, 31.5, 100, 30];
+%
+% Seed rationale: analytical optimum has w→100, L≈Lc (full-length contact),
+% giving K_geom = w*Lc²/2. Each seed targets CO≈5 L/min at its expected alpha:
+%   CO = K_geom * alpha_rad * 145 / 500000  →  Lc = sqrt(2*K_geom/w)
+v0 = [9.9, 28, 0.20, 33, 60, 33];
 lb = [ 5,   12,  0.00, 15,    33,   5];
-ub = [20,   40,  0.90, 60,   150,  50];
+ub = [20,   40,  0.90, 60,   75,  50];
 
 % Linear inequalities:
 %   x - a       <= -1   (x < a: pin orbit inside crank-fulcrum span)
@@ -52,9 +56,9 @@ nonlcon   = @(v) nlcon(v, b, rpm_max, CO_target, alpha_min, phi_deg);
 
 %% Multi-start: 3 seeds, silent; refine best with display
 v0_list = {
-    [7.6, 22.4, 0.20, 31.5, 100, 30],   % current design, small teardrop
-    [10,  28,   0.40, 40,    80, 35],   % larger r1
-    [ 6,  18,   0.30, 28,   120, 22],   % smaller mechanism
+    [9.9, 28, 0.20, 33, 100, 33],   % current x/a, f=0.2, alpha≈18°, L=Lc=33mm
+    [8.5, 38, 0.15, 41, 100, 41],   % large a, small teardrop, alpha≈12°, L=Lc=41mm
+    [9.0, 35, 0.40, 43, 100, 42],   % moderate a, heavy teardrop, alpha≈11°
 };
 opts_s = optimoptions('fmincon','Display','none',   'Algorithm','sqp', ...
     'MaxFunctionEvaluations',4000);
