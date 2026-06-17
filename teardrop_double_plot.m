@@ -16,7 +16,7 @@ clear; clc; close all;
 x   = 5.4;    % Crank arm length, mm
 a   = 32.2;   % Crank centre to fulcrum distance, mm
 r1  = 1.6;    % Teardrop arc radius, mm  (= 0.2x)
-r2  = 3.0;    % Side-wall arc radius, mm
+r2  = 2*(x-r1);  % Side-wall arc radius, mm  (must be >= x-r1 = 3.8; default = 7.6)
 
 rpm_max  = 145;
 T        = 60 / rpm_max;
@@ -252,6 +252,7 @@ fprintf('  P_elec_peak = %.3f W\n', max(P_elec));
 function theta = teardrop_double_theta(phi_deg, x, a, r1, r2)
     theta_o = atand(x*sind(phi_deg) ./ (a - x*cosd(phi_deg)));
     if r1 < 1e-9; theta = theta_o; return; end
+    if r2 > 0 && r2 < x - r1; r2 = 0; end  % invalid r2 → single teardrop
     ci = (a - x) + r1;  D = 2*x - r1;
     if D <= 0; theta = theta_o; return; end
     R    = sqrt(a^2 + x^2 - 2*a*x*cosd(phi_deg));

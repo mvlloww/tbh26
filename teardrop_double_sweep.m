@@ -36,8 +36,9 @@ K_geom    = w * (L^2 - (L-L_contact)^2) / 2;
 
 phi_deg = linspace(0, 360, 1441);   % 0.25 deg resolution
 
-%% r2 sweep
-r2_vals = [0, 0.5, 1.0, 2.0] * x;   % r2=0 → original single-teardrop
+%% r2 sweep  (r2 must be >= x-r1 = %.2f mm for valid geometry; r2=0 → single teardrop fallback)
+r2_min  = x - r1;
+r2_vals = [0, r2_min*1.1, r2_min*1.5, r2_min*2.5];
 
 theta_sweep = zeros(numel(r2_vals), numel(phi_deg));
 alpha_new   = zeros(size(r2_vals));
@@ -155,15 +156,16 @@ for i = 1:numel(r2_vals)
         aa  = linspace(thR, -pi-thR, 200);
         r1X = r1i*cos(aa); r1Y = ci+r1i*sin(aa);
 
-        % r2 arc right side: tangent point -> apex
-        a_Tp   = atan2(Tp_y-Y2, Tp_x-X2);
+        % r2 arc right side: apex -> Tp, through concave inside wall
         a_apex = atan2((a+x)-Y2, -X2);
-        aa2  = linspace(a_Tp, a_apex, 100);
+        a_Tp   = atan2(Tp_y-Y2, Tp_x-X2);
+        aa2  = linspace(a_apex, a_Tp + 2*pi, 100);
         r2X  = X2 + r2i*cos(aa2);
         r2Y  = Y2 + r2i*sin(aa2);
 
-        oX = [0, fliplr(r2X), r1X, r2X, 0];
-        oY = [a+x, fliplr(r2Y), r1Y, r2Y, a+x];
+        % apex -> right r2 arc -> r1 arc -> left r2 (mirrored) -> apex
+        oX = [0,   r2X,  r1X,  -fliplr(r2X), 0  ];
+        oY = [a+x, r2Y,  r1Y,   fliplr(r2Y), a+x];
     end
     plot(oX, oY, '--', 'Color',cmap(i,:),'LineWidth',1.5,'DisplayName',labels{i});
 end
@@ -190,6 +192,7 @@ function theta = teardrop_double_theta(phi_deg, x, a, r1, r2)
 % theta(phi) for double-radius slot: r1 arc at bottom, r2 arcs on sides.
     theta_o = atand(x*sind(phi_deg) ./ (a - x*cosd(phi_deg)));
     if r1 < 1e-9; theta = theta_o; return; end
+    if r2 > 0 && r2 < x - r1; r2 = 0; end  % invalid r2 → single teardrop
     ci = (a - x) + r1;
     D  = 2*x - r1;
     if D <= 0; theta = theta_o; return; end

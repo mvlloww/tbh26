@@ -34,20 +34,22 @@ lb = [ 5,  12, 0.00, 0.10, 15,  33,  5];
 ub = [20,  40, 0.90, 5.00, 60, 100, 50];
 
 % Linear inequalities:
-%   x - a      <= -1
-%   L_contact - L <= 0
+%   x - a         <= -1   (x < a)
+%   L_contact - L <= 0    (Lc <= L)
+%   -(f + g)      <= -1   (r2 >= x - r1, i.e. f + g >= 1)
 A  = [1 -1  0  0  0 0 0;
-      0  0  0  0 -1 0 1];
-bb = [-1; 0];
+      0  0  0  0 -1 0 1;
+      0  0 -1 -1  0 0 0];
+bb = [-1; 0; -1];
 
 objective = @(v) p_elec_peak(v, omega_gb, e_gb, e_mech, e_motor, p_bag, F_e, phi_deg);
 nonlcon   = @(v) nlcon(v, b, rpm_max, CO_target, alpha_min, phi_deg);
 
-%% Multi-start seeds  (w→100, L≈Lc target CO≈5 L/min)
+%% Multi-start seeds  (w→100, L≈Lc, CO≈5 L/min, f+g >= 1 satisfied)
 v0_list = {
-    [9.9, 28, 0.20, 0.50, 33, 100, 33],   % current x/a, r2=0.5x
-    [8.5, 38, 0.15, 1.00, 41, 100, 41],   % large a, r2=x
-    [9.0, 35, 0.40, 2.00, 43, 100, 42],   % moderate a, larger r2
+    [9.9, 28, 0.20, 1.00, 33, 100, 33],   % f=0.2, g=1.0 → f+g=1.2 ✓
+    [8.5, 38, 0.15, 1.00, 41, 100, 41],   % large a, f=0.15, g=1.0 → f+g=1.15 ✓
+    [9.0, 35, 0.40, 2.00, 43, 100, 42],   % moderate a, f=0.4, g=2.0 → f+g=2.4 ✓
 };
 
 opts_s = optimoptions('fmincon','Display','none','Algorithm','sqp','MaxFunctionEvaluations',5000);
@@ -150,6 +152,7 @@ end
 function theta = teardrop_double_theta(phi_deg, x, a, r1, r2)
     theta_o = atand(x*sind(phi_deg) ./ (a - x*cosd(phi_deg)));
     if r1 < 1e-9; theta = theta_o; return; end
+    if r2 > 0 && r2 < x - r1; r2 = 0; end  % invalid r2 → single teardrop
     ci = (a - x) + r1;  D = 2*x - r1;
     if D <= 0; theta = theta_o; return; end
     R    = sqrt(a^2 + x^2 - 2*a*x*cosd(phi_deg));

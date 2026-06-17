@@ -13,7 +13,7 @@ function teardrop_double_viz
 x0   = 5.4;
 a0   = 32.0;
 r1_0 = 1.6;
-r2_0 = 3.0;
+r2_0 = 5.0;   % must be >= x0 - r1_0 = 3.8 mm
 L0   = 57;
 Lc0  = 50;
 b0   = 0.5;
@@ -148,7 +148,7 @@ redraw();
         xv  = sld_x.Value;
         av  = sld_a.Value;
         r1v = min(sld_r1.Value, 0.95*xv);
-        r2v = sld_r2.Value;
+        r2v = max(sld_r2.Value, xv - r1v + 0.1);  % r2 must be >= x-r1
         Lv  = sld_L.Value;
         Lcv = min(sld_Lc.Value, Lv);
         bv  = sld_b.Value;
@@ -209,15 +209,19 @@ redraw();
                 aa   = linspace(thR, -pi-thR, 120);
                 r1X  = r1v*cos(aa); r1Y = ci+r1v*sin(aa);
 
-                % r2 arc (right side): tangent point -> apex
-                a_Tp   = atan2(Tp_y-Y2, Tp_x-X2);
+                % r2 arc right side: apex -> tangent point, going through the
+                % left side of the circle (clockwise through X'<0 region).
+                % linspace(a_apex, a_Tp+2pi) stays in [a_apex, a_Tp+2pi]
+                % which crosses pi and traces the concave inside wall.
                 a_apex = atan2((av+xv)-Y2, -X2);
-                aa2  = linspace(a_Tp, a_apex, 80);
-                r2X  = X2 + r2v*cos(aa2);
-                r2Y  = Y2 + r2v*sin(aa2);
+                a_Tp   = atan2(Tp_y-Y2,    Tp_x-X2);
+                aa2  = linspace(a_apex, a_Tp + 2*pi, 80);
+                r2X  = X2 + r2v*cos(aa2);   % body X' (apex->Tp)
+                r2Y  = Y2 + r2v*sin(aa2);   % body Y'
 
-                bX = [0, fliplr(r2X), r1X, r2X, 0];
-                bY = [av+xv, fliplr(r2Y), r1Y, r2Y, av+xv];
+                % outline: apex -> right r2 arc -> r1 arc -> left r2 (mirrored) -> apex
+                bX = [0,     r2X,  r1X,  -fliplr(r2X), 0    ];
+                bY = [av+xv, r2Y,  r1Y,   fliplr(r2Y), av+xv];
             end
         end
         % Rotate to world frame
@@ -282,6 +286,7 @@ redraw();
     function theta = td_double_theta(phi_d, xv, av, r1v, r2v)
         theta_o = atan2d(xv*sind(phi_d), av - xv*cosd(phi_d));
         if r1v < 1e-6; theta = theta_o; return; end
+        if r2v > 0 && r2v < xv - r1v; r2v = 0; end  % invalid r2 → single teardrop
         ci  = (av - xv) + r1v;
         Di  = 2*xv - r1v;
         if Di <= 0; theta = theta_o; return; end
