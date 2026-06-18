@@ -38,9 +38,9 @@ phi_deg = linspace(0, 360, 1441);   % 0.25 deg resolution
 
 %% r2 sweep  (r2 must be >= x-r1 = %.2f mm for valid geometry; r2=0 → single teardrop fallback)
 r2_min  = x - r1;
-% r2* = 2x(x-r1)/r1 ≈ 79.2 mm; above that the slot walls stay on correct side.
-% Use r2=0 (single teardrop) plus three increasingly smooth wall variants.
-r2_vals = [0, r2_min*1.1, r2_min*12, r2_min*24];
+% r2* = 2x(x-r1)/r1 ≈ 79.2 mm; below that the arc crosses the centreline and
+% the slot outline is geometrically invalid (though kinematics are still correct).
+r2_vals = [0, r2_min*10, r2_min*16, r2_min*24];
 
 theta_sweep = zeros(numel(r2_vals), numel(phi_deg));
 alpha_new   = zeros(size(r2_vals));
