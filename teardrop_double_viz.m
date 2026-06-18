@@ -148,7 +148,8 @@ redraw();
         xv  = sld_x.Value;
         av  = sld_a.Value;
         r1v = min(sld_r1.Value, 0.95*xv);
-        r2v = max(sld_r2.Value, xv - r1v + 0.1);  % r2 must be >= x-r1
+        r2v = sld_r2.Value;
+        if r2v > 1e-4 && r2v < xv - r1v;  r2v = 0;  end  % invalid range → single teardrop
         Lv  = sld_L.Value;
         Lcv = min(sld_Lc.Value, Lv);
         bv  = sld_b.Value;
