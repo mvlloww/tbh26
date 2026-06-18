@@ -13,7 +13,7 @@ function teardrop_double_viz
 x0   = 5.4;
 a0   = 32.0;
 r1_0 = 1.6;
-r2_0 = 40.0;  % for nearly-straight walls use r2 > 2x(x-r1)/r1 ≈ 25.7 mm
+r2_0 = 2*x0*(x0 - r1_0) / r1_0;  % = r2_star for default params; values below snap to 0
 L0   = 57;
 Lc0  = 50;
 b0   = 0.5;
@@ -111,8 +111,10 @@ redraw();
             case 'a',   lbl.Text = sprintf('Crank\x2013pivot  a   = %.1f mm', val);
             case 'r1',  lbl.Text = sprintf('r1 (teardrop)    r1  = %.2f mm  (%.0f%% of x)', ...
                                            val, 100*val/max(eps, sld_x.Value));
-            case 'r2',  lbl.Text = sprintf('r2 (side arcs)   r2  = %.2f mm  (%.0f%% of x)', ...
-                                           val, 100*val/max(eps, sld_x.Value));
+            case 'r2',
+                xv_ = sld_x.Value;  r1v_ = min(sld_r1.Value, 0.95*xv_);
+                r2s = 2*xv_*(xv_ - r1v_) / max(r1v_, 1e-9);
+                lbl.Text = sprintf('r2 (side arcs)   r2  = %.1f mm  (min* %.1f mm)', val, r2s);
             case 'L',   lbl.Text = sprintf('Paddle length    L   = %.1f mm', val);
             case 'Lc',  lbl.Text = sprintf('Contact length   Lc  = %.1f mm', val);
             case 'b',   lbl.Text = sprintf('Bag overlap      b   = %.2f  (fill %.0f%%)', ...
@@ -148,8 +150,9 @@ redraw();
         xv  = sld_x.Value;
         av  = sld_a.Value;
         r1v = min(sld_r1.Value, 0.95*xv);
-        r2v = sld_r2.Value;
-        if r2v > 1e-4 && r2v < xv - r1v;  r2v = 0;  end  % invalid range → single teardrop
+        r2v    = sld_r2.Value;
+        r2_star = 2*xv*(xv - r1v) / max(r1v, 1e-9);
+        if r2v > 1e-4 && r2v < r2_star;  r2v = 0;  end  % below r2_star arc crosses centreline
         Lv  = sld_L.Value;
         Lcv = min(sld_Lc.Value, Lv);
         bv  = sld_b.Value;
