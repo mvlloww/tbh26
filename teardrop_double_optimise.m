@@ -31,7 +31,7 @@ phi_deg = linspace(0, 360, 361);
 
 %% Bounds  v = [x, a, f, g, L, w, Lc]
 lb = [ 5,  12, 0.00, 0.00, 15,  33,  5];
-ub = [20,  40, 0.90, 5.00, 60, 100, 50];
+ub = [20,  40, 0.90, 30.0, 60, 75, 50];  % g up to 30x so r2 can reach ~200mm
 
 % Linear inequalities:
 %   x - a         <= -1   (x < a)
