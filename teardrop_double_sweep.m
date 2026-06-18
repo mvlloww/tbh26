@@ -38,7 +38,9 @@ phi_deg = linspace(0, 360, 1441);   % 0.25 deg resolution
 
 %% r2 sweep  (r2 must be >= x-r1 = %.2f mm for valid geometry; r2=0 → single teardrop fallback)
 r2_min  = x - r1;
-r2_vals = [0, r2_min*1.1, r2_min*1.5, r2_min*2.5];
+% r2* = 2x(x-r1)/r1 ≈ 79.2 mm; above that the slot walls stay on correct side.
+% Use r2=0 (single teardrop) plus three increasingly smooth wall variants.
+r2_vals = [0, r2_min*1.1, r2_min*12, r2_min*24];
 
 theta_sweep = zeros(numel(r2_vals), numel(phi_deg));
 alpha_new   = zeros(size(r2_vals));
@@ -156,10 +158,11 @@ for i = 1:numel(r2_vals)
         aa  = linspace(thR, -pi-thR, 200);
         r1X = r1i*cos(aa); r1Y = ci+r1i*sin(aa);
 
-        % r2 arc right side: apex -> Tp, through concave inside wall
-        a_apex = atan2((a+x)-Y2, -X2);
-        a_Tp   = atan2(Tp_y-Y2, Tp_x-X2);
-        aa2  = linspace(a_apex, a_Tp + 2*pi, 100);
+        % r2 arc right side: apex -> Tp, short arc
+        a_apex   = atan2((a+x)-Y2, -X2);
+        a_Tp     = atan2(Tp_y-Y2, Tp_x-X2);
+        diff_ang = mod(a_Tp - a_apex + pi, 2*pi) - pi;
+        aa2      = linspace(a_apex, a_apex + diff_ang, 100);
         r2X  = X2 + r2i*cos(aa2);
         r2Y  = Y2 + r2i*sin(aa2);
 

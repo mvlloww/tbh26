@@ -13,7 +13,7 @@ function teardrop_double_viz
 x0   = 5.4;
 a0   = 32.0;
 r1_0 = 1.6;
-r2_0 = 5.0;   % must be >= x0 - r1_0 = 3.8 mm
+r2_0 = 40.0;  % for nearly-straight walls use r2 > 2x(x-r1)/r1 ≈ 25.7 mm
 L0   = 57;
 Lc0  = 50;
 b0   = 0.5;
@@ -46,7 +46,7 @@ title(ax2,'Electrical Input Power');
 [lbl_x,   sld_x]   = mkSlider(580, 490, 'x',   [ 2   15],   x0);
 [lbl_a,   sld_a]   = mkSlider(580, 435, 'a',   [15   40],   a0);
 [lbl_r1,  sld_r1]  = mkSlider(580, 380, 'r1',  [ 0    6],   r1_0);
-[lbl_r2,  sld_r2]  = mkSlider(580, 325, 'r2',  [ 0   30],   r2_0);
+[lbl_r2,  sld_r2]  = mkSlider(580, 325, 'r2',  [ 0  200],   r2_0);
 [lbl_L,   sld_L]   = mkSlider(580, 270, 'L',   [10   80],   L0);
 [lbl_Lc,  sld_Lc]  = mkSlider(580, 215, 'Lc',  [ 1   60],   Lc0);
 [lbl_b,   sld_b]   = mkSlider(580, 160, 'b',   [ 0  0.5],   b0);
@@ -209,13 +209,11 @@ redraw();
                 aa   = linspace(thR, -pi-thR, 120);
                 r1X  = r1v*cos(aa); r1Y = ci+r1v*sin(aa);
 
-                % r2 arc right side: apex -> tangent point, going through the
-                % left side of the circle (clockwise through X'<0 region).
-                % linspace(a_apex, a_Tp+2pi) stays in [a_apex, a_Tp+2pi]
-                % which crosses pi and traces the concave inside wall.
-                a_apex = atan2((av+xv)-Y2, -X2);
-                a_Tp   = atan2(Tp_y-Y2,    Tp_x-X2);
-                aa2  = linspace(a_apex, a_Tp + 2*pi, 80);
+                % r2 arc right side: apex -> tangent point, short arc.
+                a_apex   = atan2((av+xv)-Y2, -X2);
+                a_Tp     = atan2(Tp_y-Y2,    Tp_x-X2);
+                diff_ang = mod(a_Tp - a_apex + pi, 2*pi) - pi;
+                aa2      = linspace(a_apex, a_apex + diff_ang, 80);
                 r2X  = X2 + r2v*cos(aa2);   % body X' (apex->Tp)
                 r2Y  = Y2 + r2v*sin(aa2);   % body Y'
 

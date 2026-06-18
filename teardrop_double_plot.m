@@ -16,7 +16,7 @@ clear; clc; close all;
 x   = 5.4;    % Crank arm length, mm
 a   = 32.2;   % Crank centre to fulcrum distance, mm
 r1  = 1.6;    % Teardrop arc radius, mm  (= 0.2x)
-r2  = 2*(x-r1);  % Side-wall arc radius, mm  (must be >= x-r1 = 3.8; default = 7.6)
+r2  = 50;        % Side-wall arc radius, mm  (must be >= x-r1 = 3.8; r2>26 for straight-looking walls)
 
 rpm_max  = 145;
 T        = 60 / rpm_max;
