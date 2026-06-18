@@ -7,7 +7,7 @@
 %
 % Design vector v = [x, a, f, g, L, w, L_contact]
 %   f = r1/x  in [0, 0.9]   — teardrop arc fraction
-%   g = r2/x  in [0.1, 5]   — side-wall arc fraction (g=0 → single teardrop)
+%   g = r2/x  in [0, 5]     — side-wall arc fraction (g=0 → straight sides / single teardrop)
 %
 % Minimises P_elec_peak subject to CO in [0.98, 1.02]*CO_target.
 
@@ -30,26 +30,25 @@ alpha_min = 8;   % deg
 phi_deg = linspace(0, 360, 361);
 
 %% Bounds  v = [x, a, f, g, L, w, Lc]
-lb = [ 5,  12, 0.00, 0.10, 15,  33,  5];
+lb = [ 5,  12, 0.00, 0.00, 15,  33,  5];
 ub = [20,  40, 0.90, 5.00, 60, 100, 50];
 
 % Linear inequalities:
 %   x - a         <= -1   (x < a)
 %   L_contact - L <= 0    (Lc <= L)
-%   -(f + g)      <= -1   (r2 >= x - r1, i.e. f + g >= 1)
 A  = [1 -1  0  0  0 0 0;
-      0  0  0  0 -1 0 1;
-      0  0 -1 -1  0 0 0];
-bb = [-1; 0; -1];
+      0  0  0  0 -1 0 1];
+bb = [-1; 0];
 
 objective = @(v) p_elec_peak(v, omega_gb, e_gb, e_mech, e_motor, p_bag, F_e, phi_deg);
 nonlcon   = @(v) nlcon(v, b, rpm_max, CO_target, alpha_min, phi_deg);
 
 %% Multi-start seeds  (w→100, L≈Lc, CO≈5 L/min, f+g >= 1 satisfied)
 v0_list = {
-    [9.9, 28, 0.20, 1.00, 33, 100, 33],   % f=0.2, g=1.0 → f+g=1.2 ✓
-    [8.5, 38, 0.15, 1.00, 41, 100, 41],   % large a, f=0.15, g=1.0 → f+g=1.15 ✓
-    [9.0, 35, 0.40, 2.00, 43, 100, 42],   % moderate a, f=0.4, g=2.0 → f+g=2.4 ✓
+    [9.9, 28, 0.20, 0.00, 33, 100, 33],   % g=0 → straight sides (single teardrop baseline)
+    [9.9, 28, 0.20, 1.00, 33, 100, 33],   % moderate r2
+    [8.5, 38, 0.15, 1.00, 41, 100, 41],   % large a, moderate r2
+    [9.0, 35, 0.40, 2.00, 43, 100, 42],   % moderate a, large r2
 };
 
 opts_s = optimoptions('fmincon','Display','none','Algorithm','sqp','MaxFunctionEvaluations',5000);
