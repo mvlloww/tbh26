@@ -13,10 +13,10 @@
 clear; clc; close all;
 
 %% Mechanism parameters
-x   = 5.4;    % Crank arm length, mm
-a   = 32.2;   % Crank centre to fulcrum distance, mm
-r1  = 1.6;    % Teardrop arc radius, mm  (= 0.2x)
-r2  = 50;        % Side-wall arc radius, mm  (0 → straight sides; r2>26 for nearly-straight walls)
+x   = 5.7;    % Crank arm length, mm
+a   = 25;   % Crank centre to fulcrum distance, mm
+r1  = 2.2;    % Teardrop arc radius, mm  (= 0.2x)
+r2  = 0;        % Side-wall arc radius, mm  (0 → straight sides; r2>26 for nearly-straight walls)
 
 rpm_max  = 145;
 T        = 60 / rpm_max;
@@ -24,7 +24,7 @@ omega_gb = 2*pi / T;
 b        = 0.5;
 
 %% Paddle geometry
-L         = 57.3;   % mm
+L         = 50;   % mm
 w         = 75;     % mm
 L_contact = 50;     % mm
 K_geom    = w * (L^2 - (L - L_contact)^2) / 2;
