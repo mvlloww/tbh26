@@ -30,7 +30,8 @@ e_motor = 0.83;
 omega_gb  = 2*pi*rpm_max/60;
 CO_target = 5;       % L/min per ventricle
 P_max     = 15.6;    % W power budget
-alpha_min = 8;       % deg — floor for teardrop (≤8° pushes Lc to its 50mm bound)
+alpha_min          = 8;   % deg — floor for teardrop (≤8° pushes Lc to its 50mm bound)
+L_paddle_pin_radius = 3;  % mm — inner edge of contact zone must clear the pivot pin
 
 phi_deg = linspace(0, 360, 361);   % 1-deg resolution for numerical derivatives
 
@@ -41,15 +42,15 @@ phi_deg = linspace(0, 360, 361);   % 1-deg resolution for numerical derivatives
 % giving K_geom = w*Lc²/2. Each seed targets CO≈5 L/min at its expected alpha:
 %   CO = K_geom * alpha_rad * 145 / 500000  →  Lc = sqrt(2*K_geom/w)
 v0 = [9.9, 28, 0.20, 33, 60, 33];
-lb = [ 5,   12,  0.00, 15,    33,   5];
+lb = [ 5,   12,  0.05, 15,    33,   5];
 ub = [20,   40,  0.90, 60,   75,  50];
 
 % Linear inequalities:
-%   x - a       <= -1   (x < a: pin orbit inside crank-fulcrum span)
-%   L_contact - L <= 0  (contact zone <= paddle length)
+%   x - a                  <= -1                  (x < a)
+%   L_contact - L          <= -L_paddle_pin_radius (inner edge clears pivot pin)
 A  = [1 -1  0  0 0 0;
       0  0  0 -1 0 1];
-bb = [-1; 0];
+bb = [-1; -L_paddle_pin_radius];
 
 objective = @(v) p_elec_peak(v, omega_gb, e_gb, e_mech, e_motor, p_bag, F_e, phi_deg);
 nonlcon   = @(v) nlcon(v, b, rpm_max, CO_target, alpha_min, phi_deg);
