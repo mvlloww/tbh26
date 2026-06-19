@@ -78,6 +78,119 @@ Current params (`x=9.9 mm`, `a=28 mm`): QR ≈ 2.09 (straight), ≈ 1.5 (`r1=0.2
 
 ---
 
+## Optimisers
+
+All three optimisers use MATLAB's `fmincon` (SQP algorithm) with a 3–4 point multi-start to reduce sensitivity to the initial guess. Each runs silently across all seeds, picks the best feasible result, then re-runs that seed with iteration display on so you can watch convergence.
+
+---
+
+### How they differ
+
+| File | Objective | Design variables | What it finds |
+|------|-----------|-----------------|---------------|
+| `slot_optimise.m` | Minimise `P_elec_peak` | `x, a, L, w, Lc` | Lowest power for the straight slot |
+| `teardrop_optimise.m` | Minimise `size_weight·(a+L) + λ·kink` | `x, a, f=r1/x, L, w, Lc` | Smallest mechanism that fits in power budget |
+| `teardrop_double_optimise.m` | Minimise `size_weight·(a+L) + λ·kink` | `x, a, f=r1/x, g=r2/x, L, w, Lc` | Smallest mechanism with smoothest power profile |
+
+The teardrop and double-radius optimisers treat **power as a hard constraint** (`P_elec_peak ≤ P_max`) and use the power headroom to shrink the mechanism. The straight-slot optimiser simply minimises peak power directly.
+
+---
+
+### Hard constraints (always enforced)
+
+All three optimisers share these:
+
+- **CO = CO_target** — cardiac output per ventricle must exactly hit the target (equality constraint)
+- **alpha ≥ alpha_min** — paddle swing angle must stay above a minimum to ensure adequate stroke volume
+- **x < a** — crank arm must be shorter than crank-to-pivot distance (mechanism validity)
+- **L_contact ≤ L − L_paddle_pin_radius** — contact zone inner edge must clear the pivot pin
+
+The teardrop and double optimisers also enforce:
+- **P_elec_peak ≤ P_max** — peak electrical power must not exceed the budget
+
+---
+
+### Weights and targets — what to change and where
+
+All the numbers you'd want to adjust are declared at the top of each file, before the bounds section:
+
+```matlab
+%% Fixed parameters
+rpm_max = 145;        % crank speed — change if motor speed changes
+CO_target = 5;        % L/min per ventricle — change for different cardiac output target
+P_max = 15.6;         % W — change to reflect revised power budget
+
+alpha_min = 8;        % deg — raise to force larger paddle swing (safer stroke volume margin)
+L_paddle_pin_radius = 3;  % mm — raise if pivot pin is larger
+
+% teardrop / double only:
+lambda = 100;         % smoothness weight: raise to prioritise flatter dθ/dφ over size
+size_weight = 0.2;    % W/mm: raise to push harder for smaller a+L
+```
+
+**`lambda` vs `size_weight` trade-off:**  raising `lambda` makes the optimiser prefer smoother `dθ/dφ` (less power spike) at the cost of larger mechanism dimensions; raising `size_weight` shrinks the mechanism but tolerates more kink.
+
+---
+
+### Bounds — what to change and where
+
+Immediately after the parameters, each file has `lb` and `ub` vectors that set the search range for each design variable:
+
+```matlab
+% teardrop_double_optimise.m example:
+%  v = [x,   a,    f,    g,    L,   w,   Lc  ]
+lb = [ 5,   12,  0.05, 0.00,  15,  33,   5  ];
+ub = [20,   25,  0.90, 30.0,  60,  75,  50  ];
+```
+
+Common reasons to change bounds:
+
+| Bound | What changes | Why |
+|-------|-------------|-----|
+| `ub(2)` (`a_max`) | Maximum crank-pivot distance | Physical envelope of the device |
+| `ub(1)` (`x_max`) | Maximum crank arm | Motor shaft eccentricity limit |
+| `lb(5)` / `ub(5)` (`L` range) | Paddle length | Device footprint constraints |
+| `ub(6)` (`w_max`) | Paddle width | Blood bag width limit |
+| `lb(3)` (`f_min`) | Minimum `r1` fraction | Keep `f ≥ 0.05` so the teardrop always exists |
+| `ub(4)` (`g_max`) | Maximum `r2` fraction | Raise if optimiser hits the upper wall |
+
+---
+
+### Seeds — what to change and where
+
+Below the bounds, a `v0_list` cell array provides starting points for the multi-start. If the optimiser converges to an infeasible or poor solution, add a seed closer to the expected answer:
+
+```matlab
+v0_list = {
+    [9.9, 28, 0.20,  0.0, 33, 75, 33],   % baseline
+    [9.9, 28, 0.20, 10.0, 33, 75, 33],   % with r2
+    ...
+};
+```
+
+Each row is a `[x, a, f, g, L, w, Lc]` vector (or `[x, a, f, L, w, Lc]` for the single teardrop). Seeds that violate linear constraints are automatically rejected by `fmincon`.
+
+---
+
+### Changing the objective
+
+The objective function is a one-liner anonymous function:
+
+```matlab
+% Current (teardrop / double):
+objective = @(v) size_weight * (v(2) + v(4)) + lambda * kink_penalty(v, phi_deg);
+
+% To minimise peak power instead (like slot_optimise):
+objective = @(v) p_elec_peak(v, omega_gb, e_gb, e_mech, e_motor, p_bag, F_e, phi_deg);
+
+% To minimise only mechanism size (ignore smoothness):
+objective = @(v) v(2) + v(4);   % a + L
+```
+
+If you switch to minimising peak power, remove the `P - P_max` line from `nlcon` (otherwise the power constraint fights the objective).
+
+---
+
 ## Archived files (`old/`)
 
 | File | Notes |
