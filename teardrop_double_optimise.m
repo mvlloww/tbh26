@@ -27,7 +27,8 @@ e_motor = 0.83;
 omega_gb  = 2*pi*rpm_max/60;
 CO_target = 5;
 P_max     = 15.6;
-alpha_min = 8;   % deg
+alpha_min          = 8;   % deg
+L_paddle_pin_radius = 3;  % mm — inner edge of contact zone must clear the pivot pin
 
 phi_deg = linspace(0, 360, 361);
 
@@ -39,11 +40,11 @@ lb = [ 5,  12, 0.05, 0.00, 15,  33,  5];  % f >= 0.05: r1 must exist for r2 to b
 ub = [20,  25, 0.90, 30.0, 60, 75, 50];  % g up to 30x so r2 can reach ~200mm
 
 % Linear inequalities:
-%   x - a         <= -1   (x < a)
-%   L_contact - L <= 0    (Lc <= L)
+%   x - a                      <= -1                (x < a)
+%   L_contact - L              <= -L_paddle_pin_radius   (inner edge clears pivot pin)
 A  = [1 -1  0  0  0 0 0;
       0  0  0  0 -1 0 1];
-bb = [-1; 0];
+bb = [-1; -L_paddle_pin_radius];
 
 objective = @(v) size_weight * (v(2) + v(5)) + lambda * kink_penalty(v, phi_deg);
 nonlcon   = @(v) nlcon(v, b, rpm_max, CO_target, alpha_min, phi_deg, ...
