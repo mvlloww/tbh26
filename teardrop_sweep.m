@@ -64,7 +64,8 @@ T       = 60 / rpm_max;
 omega_gb = 2*pi / T;
 
 L         = 40;
-w         = 80;
+w         = 80;    % out of plane
+t_paddle  = 4;     % perpendicular to arm in mechanism plane
 L_contact = 35;
 K_geom    = w * (L^2 - (L-L_contact)^2) / 2;
 
@@ -192,12 +193,16 @@ xlim([-x*1.3, x*1.3]);
 ylim([a - x - 3, a + x + 3]);
 
 %% Console summary
-fprintf('=== Teardrop slot sweep (x=%.2f mm, a=%.2f mm, y=a-x=%.2f mm, b=%.2f) ===\n', x, a, a-x, b);
-fprintf('  Original:  alpha=%.2f deg @ phi=%.1f  |  QR ratio=%.2f  |  SV=%.2f mL  |  CO=%.2f L/min\n', ...
+fprintf('=== Teardrop slot sweep (x=%.2f mm, a=%.2f mm, b=%.2f) ===\n', x, a, b);
+fprintf('  Paddle L=%g mm  w=%g mm  t_paddle=%g mm  Lc=%g mm\n', L, w, t_paddle, L_contact);
+fprintf('  Original:  alpha=%.2f deg @ phi=%.1f  |  QR=%.2f  |  SV=%.2f mL  |  CO=%.2f L/min\n', ...
     alpha, phi_pk, qr_orig, SV_orig, CO_orig);
 for i = 1:numel(r1_vals)
-    fprintf('  r1=%.2f mm: alpha=%.2f deg @ phi=%.1f  |  QR ratio=%.2f  |  SV=%.2f mL  |  CO=%.2f L/min\n', ...
-        r1_vals(i), alpha_new(i), phipk_new(i), qr_new(i), SV_new(i), CO_new(i));
+    Di_i   = 2*x - r1_vals(i);
+    Tx_i   = r1_vals(i) * sqrt(max(Di_i^2 - r1_vals(i)^2, 0)) / Di_i;
+    warn_i = ''; if t_paddle < 2*Tx_i; warn_i = '  *** t TOO THIN ***'; end
+    fprintf('  r1=%.2f mm: alpha=%.2f deg  QR=%.2f  CO=%.2f L/min  min_t=%.1f mm%s\n', ...
+        r1_vals(i), alpha_new(i), qr_new(i), CO_new(i), 2*Tx_i, warn_i);
 end
 
 %% ================================================================

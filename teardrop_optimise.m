@@ -27,6 +27,7 @@ CO_target = 5;       % L/min per ventricle
 P_max     = 15.6;    % W power budget
 alpha_min          = 8;   % deg — floor for teardrop (≤8° pushes Lc to its 50mm bound)
 L_paddle_pin_radius = 3;  % mm — inner edge of contact zone must clear the pivot pin
+t_paddle            = 4;  % mm — paddle body thickness (perpendicular to arm in mechanism plane)
 
 lambda      = 100;  % smoothness weight (W per deg/deg kink)
 size_weight = 0.2;  % W/mm — penalises a + L; raise to push harder for compact geometry
@@ -107,6 +108,11 @@ fprintf('  QR ratio    = %.3f\n', qr_o);
 fprintf('  CO          = %.3f L/min/ventricle  (target %.1f)\n', co_o, CO_target);
 fprintf('  P_elec_peak = %.3f W  (%s)\n', P_elec_o, s_td);
 fprintf('  kink        = %.4f deg/deg\n', kink_o);
+Di_slot = 2*xo - r1o;
+Tx_slot = r1o * sqrt(max(Di_slot^2 - r1o^2, 0)) / Di_slot;
+warn_t  = ''; if t_paddle < 2*Tx_slot; warn_t = '  *** TOO THIN ***'; end
+fprintf('  t_paddle    = %.1f mm  (slot half-width Tx=%.2f mm, min t=%.1f mm)%s\n', ...
+    t_paddle, Tx_slot, 2*Tx_slot, warn_t);
 fprintf('\n=== Same L/w/Lc at r1=0 (straight slot) ===\n');
 fprintf('  alpha       = %.2f deg\n', alpha_str);
 fprintf('  QR ratio    = %.3f\n', qr_str);

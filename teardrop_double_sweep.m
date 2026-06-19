@@ -30,7 +30,8 @@ T        = 60 / rpm_max;
 omega_gb = 2*pi / T;
 
 L         = 40;
-w         = 80;
+w         = 80;    % out of plane
+t_paddle  = 4;     % perpendicular to arm in mechanism plane
 L_contact = 35;
 K_geom    = w * (L^2 - (L-L_contact)^2) / 2;
 
@@ -184,7 +185,10 @@ legend('Location','south','NumColumns',2); grid on; axis equal;
 xlim([-x*1.5, x*1.5]); ylim([a-x-3, a+x+3]);
 
 %% Console summary
+Di_slot = 2*x - r1;
+Tx_slot = r1 * sqrt(max(Di_slot^2 - r1^2, 0)) / Di_slot;  % slot half-width at r1/wall tangent point
 fprintf('=== Double-radius slot sweep (x=%.2f mm, a=%.2f mm, r1=%.2f mm, b=%.2f) ===\n', x, a, r1, b);
+fprintf('  Paddle L=%g mm  w=%g mm  t_paddle=%g mm  (min t for slot clearance: %.1f mm)\n', L, w, t_paddle, 2*Tx_slot);
 for i = 1:numel(r2_vals)
     fprintf('  r2=%5.2f mm: alpha=%.2f deg @ phi=%.1f  |  QR=%.3f  |  SV=%.2f mL  |  CO=%.2f L/min\n', ...
         r2_vals(i), alpha_new(i), phipk_new(i), qr_new(i), SV_new(i), CO_new(i));

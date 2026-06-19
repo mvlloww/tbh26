@@ -24,9 +24,10 @@ omega_gb = 2*pi / T;
 b        = 0.5;
 
 %% Paddle geometry
-L         = 50;   % mm
-w         = 75;     % mm
-L_contact = 50;     % mm
+L         = 50;    % mm
+w         = 75;    % mm  (out of plane)
+t_paddle  = 4;     % mm  (perpendicular to arm in mechanism plane)
+L_contact = 50;    % mm
 K_geom    = w * (L^2 - (L - L_contact)^2) / 2;
 
 %% Torque / power chain
@@ -146,7 +147,7 @@ annotation('textbox',[0.72 0.35 0.26 0.28],'String',{
     sprintf('QR ratio = %.3f  (straight: %.3f)', qr_ratio, (a+x)/(a-x)),
     sprintf('Overlap b = %.2f  |  \\gamma = %.1f°', b, gamma),
     sprintf('─────────────────────'),
-    sprintf('L = %g mm  |  w = %g mm', L, w),
+    sprintf('L = %g mm  |  w = %g mm  |  t = %g mm', L, w, t_paddle),
     sprintf('L_{contact} = %g mm from tip', L_contact),
     sprintf('SV = %.1f mL / ventricle', SV),
     sprintf('CO = %.2f L/min combined', CO)}, ...
@@ -241,12 +242,16 @@ legend({'LV ejection','RV ejection','Paddle angle'},'Location','northeast');
 grid on; xlim([0 360]); ylim([-alpha*1.3, alpha*1.3]); xticks(0:45:360);
 
 %% Console summary
+Di_slot  = 2*x - r1;
+Tx_slot  = r1 * sqrt(max(Di_slot^2 - r1^2, 0)) / Di_slot;
 fprintf('=== Crank-and-Slotted-Arm LVAD — Double-Radius Slot ===\n');
 fprintf('  r1 = %.2f mm  r2 = %.2f mm\n', r1, r2);
 fprintf('  alpha = %.2f deg  (straight slot: %.2f)\n', alpha, asind(x/a));
 fprintf('  QR ratio = %.3f  (straight: %.3f)\n', qr_ratio, (a+x)/(a-x));
 fprintf('  CO = %.2f L/min combined\n', CO);
 fprintf('  P_elec_peak = %.3f W\n', max(P_elec));
+fprintf('  Paddle L = %g mm  |  w = %g mm  |  t = %g mm\n', L, w, t_paddle);
+fprintf('  Slot half-width Tx:  %.2f mm  (min t_paddle for clearance = %.1f mm)\n', Tx_slot, 2*Tx_slot);
 
 %% ================================================================
 function theta = teardrop_double_theta(phi_deg, x, a, r1, r2)

@@ -18,6 +18,7 @@ r1_0 = 1.6;   % 1.52 mm
 L0   = 57;
 Lc0  = 50;
 b0   = 0.5;
+t0   = 4;     % paddle thickness, mm
 phi  = 0;
 
 %% Physics for power overlay (w has no slider — fixed at analytical optimum)
@@ -51,8 +52,9 @@ title(ax2,'Electrical Input Power');
 [lbl_Lc,  sld_Lc]  = mkSlider(580, 205, 'Lc',  [1   60],   Lc0);
 [lbl_b,   sld_b]   = mkSlider(580, 145, 'b',   [0  0.5],   b0);
 [lbl_phi, sld_phi] = mkSlider(580,  85, 'phi', [0  360],   phi);
+[lbl_t,   sld_t]  = mkSlider(580,  25, 't',  [1   20],   t0);
 
-btn = uibutton(fig,'Position',[580 35 120 35],'Text','Play', ...
+btn = uibutton(fig,'Position',[740 15 120 35],'Text','Play', ...
     'ButtonPushedFcn',@(~,~) togglePlay());
 
 %% Timer
@@ -77,7 +79,8 @@ hTxtRV  = text(ax,NaN,NaN,'','Color','w','FontSize',9,'FontWeight','bold', ...
 hPath   = plot(ax, NaN, NaN, 'b:',  'LineWidth',1);
 hCrank  = plot(ax, NaN, NaN, 'b-',  'LineWidth',2);
 hNeut   = plot(ax, NaN, NaN, 'k:',  'LineWidth',1);
-hPaddle = plot(ax, NaN, NaN, 'k-',  'LineWidth',3);
+hPaddle = patch(ax, NaN(4,1), NaN(4,1), [0.15 0.15 0.15], ...
+                'FaceAlpha',0.85,'EdgeColor','k','LineWidth',1.5);
 hCtact  = plot(ax, NaN, NaN, 'r-',  'LineWidth',5);
 hFulc   = plot(ax, NaN, NaN, 'ko',  'MarkerFaceColor','k','MarkerSize',8);
 hCC     = plot(ax, NaN, NaN, 'bo',  'MarkerFaceColor','b','MarkerSize',8);
@@ -120,6 +123,7 @@ redraw();
             case 'b',   lbl.Text = sprintf('Bag overlap      b   = %.2f  (fill %.0f%%)', ...
                                            val, (1-val)*100);
             case 'phi', lbl.Text = sprintf('Crank angle      \x03c6   = %.0f\x00b0', val);
+            case 't',   lbl.Text = sprintf('Paddle thickness t   = %.1f mm', val);
         end
     end
 
@@ -153,6 +157,7 @@ redraw();
         Lv  = sld_L.Value;
         Lcv = min(sld_Lc.Value, Lv);
         bv  = sld_b.Value;
+        tv  = sld_t.Value;
 
         updLabel(lbl_x,   'x',   xv);
         updLabel(lbl_a,   'a',   av);
@@ -161,6 +166,7 @@ redraw();
         updLabel(lbl_Lc,  'Lc',  Lcv);
         updLabel(lbl_b,   'b',   bv);
         updLabel(lbl_phi, 'phi', phi);
+        updLabel(lbl_t,   't',   tv);
 
         %% Crank kinematics (unchanged by slot shape)
         F    = [0, 0];
@@ -180,6 +186,13 @@ redraw();
         %% Arm centreline: from paddle tip through F to slot apex
         apex = F + (av + xv) * arm_dir;
         set(hArm, 'XData',[tip(1) apex(1)], 'YData',[tip(2) apex(2)]);
+
+        %% Paddle rectangle (thickness tv perpendicular to arm)
+        perp = [sin(theta_r), -cos(theta_r)];
+        h    = tv / 2;
+        px   = [F(1)+h*perp(1), tip(1)+h*perp(1), tip(1)-h*perp(1), F(1)-h*perp(1)];
+        py   = [F(2)+h*perp(2), tip(2)+h*perp(2), tip(2)-h*perp(2), F(2)-h*perp(2)];
+        set(hPaddle, 'XData',px, 'YData',py);
 
         %% Teardrop slot outline in body frame → world frame
         ys = av - xv;   % bottom of teardrop (body Y' = a-x)
@@ -215,9 +228,8 @@ redraw();
         %% Crank circle
         cang = linspace(0, 2*pi, 80);
         set(hPath,   'XData', C(1)+xv*cos(cang), 'YData', C(2)+xv*sin(cang));
-        set(hCrank,  'XData', [C(1) P(1)],        'YData', [C(2) P(2)]);
-        set(hNeut,   'XData', [F(1) C(1)],        'YData', [F(2) C(2)]);
-        set(hPaddle, 'XData', [F(1) tip(1)],      'YData', [F(2) tip(2)]);
+        set(hCrank,  'XData', [C(1) P(1)], 'YData', [C(2) P(2)]);
+        set(hNeut,   'XData', [F(1) C(1)], 'YData', [F(2) C(2)]);
         set(hCtact,  'XData', [cInner(1) tip(1)], 'YData', [cInner(2) tip(2)]);
         set(hFulc,   'XData', F(1),  'YData', F(2));
         set(hCC,     'XData', C(1),  'YData', C(2));

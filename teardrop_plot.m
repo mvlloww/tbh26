@@ -28,8 +28,9 @@ b = 0.5;   % Bag overlap [0, 0.5]: fill at theta=0 is (1-b)*100%
 
 %% Paddle geometry — tune these
 L         = 57.3;    % Paddle length (radial extent from pivot), mm
-w         = 75;    % Paddle width (perpendicular to arm), mm
-L_contact = 50;    % Contact length from tip of paddle, mm
+w         = 75;      % Paddle width (out of plane), mm
+t_paddle  = 4;       % Paddle thickness (perpendicular to arm in mechanism plane), mm
+L_contact = 50;      % Contact length from tip of paddle, mm
 
 K_geom = w * (L^2 - (L - L_contact)^2) / 2;   % dV/dtheta, mm³/rad
 
@@ -195,7 +196,7 @@ annotation('textbox',[0.72 0.35 0.26 0.28],'String',{
     sprintf('QR ratio = %.3f  (straight: %.3f)', qr_ratio, (a+x)/(a-x)),
     sprintf('Overlap b = %.2f  |  \\gamma = %.1f°', b, gamma),
     sprintf('─────────────────────'),
-    sprintf('L = %g mm  |  w = %g mm', L, w),
+    sprintf('L = %g mm  |  w = %g mm  |  t = %g mm', L, w, t_paddle),
     sprintf('L_{contact} = %g mm from tip', L_contact),
     sprintf('SV = %.1f mL / ventricle', SV),
     sprintf('CO = %.2f L/min / ventricle', SV * rpm_max / 1000),
@@ -371,7 +372,10 @@ fprintf('  Crank angle at max:       %.1f deg  (straight slot: %.1f)\n', phi_pk,
 fprintf('  Quick-return ratio:       %.3f  (straight slot: %.3f)\n', qr_ratio, (a+x)/(a-x));
 fprintf('  Overlap b:                %.2f  |  gamma = %.1f deg\n', b, gamma);
 fprintf('  ─────────────────────────────────────\n');
-fprintf('  Paddle L = %g mm  |  w = %g mm\n', L, w);
+Di_slot  = 2*x - r1;
+Tx_slot  = r1 * sqrt(max(Di_slot^2 - r1^2, 0)) / Di_slot;   % slot max half-width in body X'
+fprintf('  Paddle L = %g mm  |  w = %g mm  |  t = %g mm\n', L, w, t_paddle);
+fprintf('  Slot half-width Tx:       %.2f mm  (min t_paddle for clearance = %.1f mm)\n', Tx_slot, 2*Tx_slot);
 fprintf('  Contact from tip:         %.0f mm  (r: %.0f to %g mm)\n', L_contact, L-L_contact, L);
 fprintf('  K_geom:                   %.0f mm3/rad\n', K_geom);
 fprintf('  Stroke volume/ventricle:  %.1f mL\n', SV);
