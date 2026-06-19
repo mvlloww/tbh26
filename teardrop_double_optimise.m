@@ -35,7 +35,7 @@ lambda      = 100;  % smoothness weight (W per deg/deg kink)
 size_weight = 0.2;  % W/mm — penalises a + L; raise to push harder for compact geometry
 
 %% Bounds  v = [x, a, f, g, L, w, Lc]
-lb = [ 5,  12, 0.00, 0.00, 15,  33,  5];
+lb = [ 5,  12, 0.05, 0.00, 15,  33,  5];  % f >= 0.05: r1 must exist for r2 to be meaningful
 ub = [20,  25, 0.90, 30.0, 60, 75, 50];  % g up to 30x so r2 can reach ~200mm
 
 % Linear inequalities:
