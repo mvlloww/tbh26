@@ -1,12 +1,12 @@
 %% Double-Radius Paddle / Mechanism Geometry Optimiser
 %
-% Minimises  P_elec_peak + lambda * kink  subject to CO in [0.98,1.02]*CO_target.
+% Minimises  size_weight*(a + L) + lambda * kink
+% subject to:  CO = CO_target,  alpha >= alpha_min,  P_elec_peak <= P_max.
 %
-%   P_elec_peak — peak electrical power (W) at worst-case crank angle
-%   kink        — max step-change in dθ/dφ (deg/deg) between adjacent samples;
-%                 large at the r1/wall junction, suppressed by r2 > r2_star
-%   lambda      — smoothness weight (W per deg/deg kink); raise to prefer
-%                 smooth profiles over raw peak-power minimisation
+% Power is a hard constraint (budget), not the primary objective.
+% The optimizer trades the power headroom for smaller mechanism dimensions.
+%   size_weight — W/mm; raise to push harder for compact geometry
+%   lambda      — W/(deg/deg kink); raise to prefer smooth power profiles
 %
 % Design vector v = [x, a, f, g, L, w, L_contact]
 %   f = r1/x  in [0, 0.9]    — teardrop arc fraction
@@ -31,11 +31,12 @@ alpha_min = 8;   % deg
 
 phi_deg = linspace(0, 360, 361);
 
-lambda = 100;   % smoothness weight (W per deg/deg kink) — raise to prefer smoother profiles
+lambda      = 100;  % smoothness weight (W per deg/deg kink)
+size_weight = 0.2;  % W/mm — penalises a + L; raise to push harder for compact geometry
 
 %% Bounds  v = [x, a, f, g, L, w, Lc]
 lb = [ 5,  12, 0.00, 0.00, 15,  33,  5];
-ub = [20,  40, 0.90, 30.0, 60, 75, 50];  % g up to 30x so r2 can reach ~200mm
+ub = [20,  25, 0.90, 30.0, 60, 75, 50];  % g up to 30x so r2 can reach ~200mm
 
 % Linear inequalities:
 %   x - a         <= -1   (x < a)
@@ -44,9 +45,9 @@ A  = [1 -1  0  0  0 0 0;
       0  0  0  0 -1 0 1];
 bb = [-1; 0];
 
-objective = @(v) p_elec_peak(v, omega_gb, e_gb, e_mech, e_motor, p_bag, F_e, phi_deg) ...
-                + lambda * kink_penalty(v, phi_deg);
-nonlcon   = @(v) nlcon(v, b, rpm_max, CO_target, alpha_min, phi_deg);
+objective = @(v) size_weight * (v(2) + v(5)) + lambda * kink_penalty(v, phi_deg);
+nonlcon   = @(v) nlcon(v, b, rpm_max, CO_target, alpha_min, phi_deg, ...
+                       omega_gb, e_gb, e_mech, e_motor, p_bag, F_e, P_max);
 
 %% Multi-start seeds
 % g must exceed 2*(1/f - 1) = r2_star/x for valid double-radius geometry.
@@ -102,7 +103,7 @@ if P_elec_o <= P_max, s1='within budget'; else, s1='OVER BUDGET'; end
 if P_r1only <= P_max, s2='within budget'; else, s2='OVER BUDGET'; end
 if P_str    <= P_max, s3='within budget'; else, s3='OVER BUDGET'; end
 
-fprintf('\n=== Optimised Double-Radius Mechanism  (lambda=%.0f) ===\n', lambda);
+fprintf('\n=== Optimised Double-Radius Mechanism  (size_weight=%.2f  lambda=%.0f) ===\n', size_weight, lambda);
 fprintf('  x         = %.3f mm\n', xo);
 fprintf('  a         = %.3f mm\n', ao);
 fprintf('  f = r1/x  = %.3f  ->  r1 = %.3f mm\n', fo, r1o);
@@ -147,13 +148,16 @@ function CO = co_calc(v, b, rpm_max, phi_deg)
     CO     = SV * rpm_max / 1000;
 end
 
-function [c, ceq] = nlcon(v, b, rpm_max, CO_target, alpha_min, phi_deg)
+function [c, ceq] = nlcon(v, b, rpm_max, CO_target, alpha_min, phi_deg, ...
+                          omega_gb, e_gb, e_mech, e_motor, p_bag, F_e, P_max)
     alpha = max(teardrop_double_theta(phi_deg, v(1), v(2), v(3)*v(1), v(4)*v(1)));
     CO    = co_calc(v, b, rpm_max, phi_deg);
+    P     = p_elec_peak(v, omega_gb, e_gb, e_mech, e_motor, p_bag, F_e, phi_deg);
     ceq   = [];
     c     = [alpha_min - alpha;
-             CO - 1.02*CO_target;
-             0.98*CO_target - CO];
+             CO - 1.0*CO_target;
+             1.0*CO_target - CO;
+             P - P_max];
 end
 
 function [x, a, f, g, L, w, Lc] = unpack(v)
