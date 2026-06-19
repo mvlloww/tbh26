@@ -1,20 +1,15 @@
 %% Teardrop Paddle / Mechanism Geometry Optimiser
 %
-% Finds x, a, f (=r1/x), L, w, L_contact that minimise P_elec_peak subject to:
-%   CO    in [0.98, 1.02] * CO_target  (±2% band, per ventricle)
-%   alpha >= alpha_min                 (teardrop paddle swing floor)
+% Minimises  size_weight*(a + L) + lambda * kink
+% subject to:  CO = CO_target,  alpha >= alpha_min,  P_elec_peak <= P_max.
 %
-% The teardrop slot adds r1 = f*x as a free variable. Both alpha and the
-% peak angular rate dtheta/dphi are computed numerically (no closed form
-% for the teardrop geometry). The power formula is unchanged from
-% paddle_optimise.m — GR still cancels:
+% Power is a hard constraint (budget), not the primary objective.
+% The optimizer trades the power headroom for smaller mechanism dimensions.
+%   size_weight — W/mm; raise to push harder for compact geometry
+%   lambda      — W/(deg/deg kink); raise to prefer smooth power profiles
 %
-%   P_elec_peak = T_p × max|dθ/dφ| × omega_gb / (e_gb × e_mech × e_motor)
-%
-% where max|dθ/dφ| is the numerical peak from the teardrop theta curve
-% (reduced vs the straight-slot value x/(a-x) when f > 0).
-%
-% A 3-point multi-start is used to reduce sensitivity to the initial guess.
+% Design vector v = [x, a, f, L, w, L_contact]
+%   f = r1/x in [0.05, 0.9]: r1=f*x is the teardrop arc radius
 
 clear; clc;
 
@@ -33,15 +28,12 @@ P_max     = 15.6;    % W power budget
 alpha_min          = 8;   % deg — floor for teardrop (≤8° pushes Lc to its 50mm bound)
 L_paddle_pin_radius = 3;  % mm — inner edge of contact zone must clear the pivot pin
 
+lambda      = 100;  % smoothness weight (W per deg/deg kink)
+size_weight = 0.2;  % W/mm — penalises a + L; raise to push harder for compact geometry
+
 phi_deg = linspace(0, 360, 361);   % 1-deg resolution for numerical derivatives
 
-%% Design vector v = [x, a, f, L, w, L_contact]
-%   f = r1/x in [0, 0.9]: f=0 → straight slot, f→1 → full circle (invalid)
-%
-% Seed rationale: analytical optimum has w→100, L≈Lc (full-length contact),
-% giving K_geom = w*Lc²/2. Each seed targets CO≈5 L/min at its expected alpha:
-%   CO = K_geom * alpha_rad * 145 / 500000  →  Lc = sqrt(2*K_geom/w)
-v0 = [9.9, 28, 0.20, 33, 60, 33];
+%% Bounds  v = [x, a, f, L, w, L_contact]
 lb = [ 5,   12,  0.05, 15,    33,   5];
 ub = [20,   40,  0.90, 60,   75,  50];
 
@@ -52,56 +44,57 @@ A  = [1 -1  0  0 0 0;
       0  0  0 -1 0 1];
 bb = [-1; -L_paddle_pin_radius];
 
-objective = @(v) p_elec_peak(v, omega_gb, e_gb, e_mech, e_motor, p_bag, F_e, phi_deg);
-nonlcon   = @(v) nlcon(v, b, rpm_max, CO_target, alpha_min, phi_deg);
+objective = @(v) size_weight * (v(2) + v(4)) + lambda * kink_penalty(v, phi_deg);
+nonlcon   = @(v) nlcon(v, b, rpm_max, CO_target, alpha_min, phi_deg, ...
+                       omega_gb, e_gb, e_mech, e_motor, p_bag, F_e, P_max);
 
-%% Multi-start: 3 seeds, silent; refine best with display
+%% Multi-start seeds
 v0_list = {
-    [9.9, 28, 0.20, 33, 100, 33],   % current x/a, f=0.2, alpha≈18°, L=Lc=33mm
-    [8.5, 38, 0.15, 41, 100, 41],   % large a, small teardrop, alpha≈12°, L=Lc=41mm
-    [9.0, 35, 0.40, 43, 100, 42],   % moderate a, heavy teardrop, alpha≈11°
+    [9.9, 28, 0.20, 33, 75, 33],   % current x/a, f=0.2
+    [8.5, 38, 0.15, 41, 75, 41],   % large a, small teardrop
+    [9.0, 35, 0.40, 43, 75, 42],   % moderate a, heavy teardrop
 };
-opts_s = optimoptions('fmincon','Display','none',   'Algorithm','sqp', ...
-    'MaxFunctionEvaluations',4000);
-opts_v = optimoptions('fmincon','Display','iter',   'Algorithm','sqp', ...
-    'MaxFunctionEvaluations',4000);
+opts_s = optimoptions('fmincon','Display','none','Algorithm','sqp','MaxFunctionEvaluations',4000);
+opts_v = optimoptions('fmincon','Display','iter','Algorithm','sqp','MaxFunctionEvaluations',4000);
 
 fprintf('Multi-start search (%d seeds)...\n', numel(v0_list));
-P_best = inf;  v_best = v0_list{1};
+obj_best = inf;  v_best = v0_list{1};
 for k = 1:numel(v0_list)
     try
-        [vk, Pk, efk] = fmincon(objective, v0_list{k}, A, bb, [], [], lb, ub, nonlcon, opts_s);
-        if efk > 0 && Pk < P_best
-            P_best = Pk;  v_best = vk;
+        [vk, fk, efk] = fmincon(objective, v0_list{k}, A, bb, [], [], lb, ub, nonlcon, opts_s);
+        if efk > 0 && fk < obj_best
+            obj_best = fk;  v_best = vk;
         end
     catch
     end
 end
-fprintf('Best seed gives P = %.3f W; refining with display:\n\n', P_best);
-[v_opt, P_opt] = fmincon(objective, v_best, A, bb, [], [], lb, ub, nonlcon, opts_v);
+fprintf('Best seed gives obj = %.3f; refining with display:\n\n', obj_best);
+[v_opt, ~] = fmincon(objective, v_best, A, bb, [], [], lb, ub, nonlcon, opts_v);
 
-%% Unpack and derive quantities
+%% Unpack and report
 [xo, ao, fo, Lo, wo, Lco] = unpack(v_opt);
 r1o = fo * xo;
 
-theta_o = teardrop_theta(phi_deg, xo, ao, r1o);
-dth_o   = gradient(theta_o, phi_deg);
-alpha_o = max(theta_o);
-qr_o    = max(dth_o) / max(-dth_o);   % LV-peak / RV-peak rate ratio
-co_o    = co_calc(v_opt, b, rpm_max, phi_deg);
+theta_o  = teardrop_theta(phi_deg, xo, ao, r1o);
+dth_o    = gradient(theta_o, phi_deg);
+alpha_o  = max(theta_o);
+qr_o     = max(dth_o) / max(-dth_o);
+co_o     = co_calc(v_opt, b, rpm_max, phi_deg);
+P_elec_o = p_elec_peak(v_opt, omega_gb, e_gb, e_mech, e_motor, p_bag, F_e, phi_deg);
+kink_o   = kink_penalty(v_opt, phi_deg);
 
-%% Straight-slot comparison at the same L/w/Lc (r1=0, same x,a)
+% Comparison: straight slot at same L/w/Lc (r1=0)
 v_str    = [xo, ao, 0, Lo, wo, Lco];
 alpha_str = asind(xo/ao);
 qr_str    = (ao+xo) / (ao-xo);
 p_str     = p_elec_peak(v_str, omega_gb, e_gb, e_mech, e_motor, p_bag, F_e, phi_deg);
 co_str    = co_calc(v_str, b, rpm_max, phi_deg);
+kink_str  = kink_penalty(v_str, phi_deg);
 
-%% Report
-if P_opt <= P_max, s_td = 'within budget'; else, s_td = 'OVER BUDGET'; end
-if p_str <= P_max, s_st = 'within budget'; else, s_st = 'OVER BUDGET'; end
+if P_elec_o <= P_max, s_td = 'within budget'; else, s_td = 'OVER BUDGET'; end
+if p_str    <= P_max, s_st = 'within budget'; else, s_st = 'OVER BUDGET'; end
 
-fprintf('\n=== Optimised Teardrop Mechanism ===\n');
+fprintf('\n=== Optimised Teardrop Mechanism  (size_weight=%.2f  lambda=%.0f) ===\n', size_weight, lambda);
 fprintf('  x         = %.3f mm\n', xo);
 fprintf('  a         = %.3f mm\n', ao);
 fprintf('  f = r1/x  = %.3f  ->  r1 = %.3f mm\n', fo, r1o);
@@ -110,20 +103,16 @@ fprintf('  w         = %.3f mm\n', wo);
 fprintf('  L_contact = %.3f mm\n', Lco);
 fprintf('  -----------------------------------------\n');
 fprintf('  alpha       = %.2f deg  (floor %.0f)\n', alpha_o, alpha_min);
-fprintf('  QR ratio    = %.3f  (LV/RV peak rate; <1 means RV is faster)\n', qr_o);
-fprintf('  CO          = %.3f L/min/ventricle  (target %.1f +/-2%%)\n', co_o, CO_target);
-fprintf('  P_elec_peak = %.3f W  (budget %.1f)  -> %s\n', P_opt, P_max, s_td);
-fprintf('\n');
-fprintf('=== Same L/w/Lc at r1=0 (straight slot, no teardrop) ===\n');
+fprintf('  QR ratio    = %.3f\n', qr_o);
+fprintf('  CO          = %.3f L/min/ventricle  (target %.1f)\n', co_o, CO_target);
+fprintf('  P_elec_peak = %.3f W  (%s)\n', P_elec_o, s_td);
+fprintf('  kink        = %.4f deg/deg\n', kink_o);
+fprintf('\n=== Same L/w/Lc at r1=0 (straight slot) ===\n');
 fprintf('  alpha       = %.2f deg\n', alpha_str);
 fprintf('  QR ratio    = %.3f\n', qr_str);
 fprintf('  CO          = %.3f L/min/ventricle\n', co_str);
-fprintf('  P_elec_peak = %.3f W  -> %s\n', p_str, s_st);
-fprintf('\n');
-fprintf('  Teardrop benefit: dP = %.3f W  (%.1f%% reduction)\n', ...
-    p_str - P_opt, 100*(p_str - P_opt)/p_str);
-fprintf('  CO penalty at r1=0: dCO = %.3f L/min (same paddles, no teardrop)\n', ...
-    co_str - co_o);
+fprintf('  P_elec_peak = %.3f W  (%s)\n', p_str, s_st);
+fprintf('  kink        = %.4f deg/deg\n', kink_str);
 
 %% ===================================================================
 function P = p_elec_peak(v, omega_gb, e_gb, e_mech, e_motor, p_bag, F_e, phi_deg)
@@ -149,16 +138,26 @@ function CO = co_calc(v, b, rpm_max, phi_deg)
     CO     = SV * rpm_max / 1000;                          % L/min
 end
 
-function [c, ceq] = nlcon(v, b, rpm_max, CO_target, alpha_min, phi_deg)
+function [c, ceq] = nlcon(v, b, rpm_max, CO_target, alpha_min, phi_deg, ...
+                          omega_gb, e_gb, e_mech, e_motor, p_bag, F_e, P_max)
     [x, a, f, ~, ~, ~] = unpack(v);
     r1    = f * x;
     theta = teardrop_theta(phi_deg, x, a, r1);
     alpha = max(theta);
     CO    = co_calc(v, b, rpm_max, phi_deg);
+    P     = p_elec_peak(v, omega_gb, e_gb, e_mech, e_motor, p_bag, F_e, phi_deg);
     ceq   = [];
-    c     = [alpha_min - alpha;          % alpha >= alpha_min
-             CO - 1.02*CO_target;        % CO <= 1.05 * target
-             0.98*CO_target - CO];       % CO >= 0.95 * target
+    c     = [alpha_min - alpha;
+             CO - 1.0*CO_target;
+             1.0*CO_target - CO;
+             P - P_max];
+end
+
+function k = kink_penalty(v, phi_deg)
+    [x, ~, f, ~, ~, ~] = unpack(v);
+    theta = teardrop_theta(phi_deg, x, v(2), f*x);
+    dth   = gradient(theta, phi_deg);
+    k     = max(abs(diff(dth)));
 end
 
 function [x, a, f, L, w, Lc] = unpack(v)
