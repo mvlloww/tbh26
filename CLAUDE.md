@@ -73,9 +73,11 @@ Earlier params (x=7.6mm, a=22.4mm): QR ≈ 2.03.
 Contact zone: radius `(L - L_contact)` to `L`. This matters because tip contact produces more flow per mm than pivot-end contact (larger moment arm). `K_geom = w * (L² − (L − L_contact)²) / 2`.
 
 ## Torque model
-`T_p = F_total × r_moment` where `F_total = p_bag × A_contact + F_e` (constant during ejection).
+`T_p = F_total × r_moment` where `F_total = p × A_contact + F_e` (constant during ejection).
 `r_moment = L − L_contact/2` (midpoint of contact zone from pivot, in metres).
 `A_contact = w × L_contact` in m². Overlap b shifts torque onset via the existing ejection masks — no extra logic needed.
+
+LV and RV now have **separate pressures**: `p_LV_mmHg` and `p_RV_mmHg` (converted via `133.322 Pa/mmHg`), giving `F_total_LV` and `F_total_RV`. Typical values: LV = 120 mmHg, RV = 25 mmHg. Each is applied only during its own ejection mask.
 
 ## `b` parameter
 `b` is a **geometric** bag overlap fraction in **[0, 0.5]**, not a time fraction. It was previously misimplemented as `b*T` — don't repeat that mistake.
@@ -94,6 +96,14 @@ Same stroke volume per ventricle, but different flow profiles due to quick-retur
 - RV ejection crank span ≈ (360−phi_pk) − phi_RV_start (long, slow — ~81% longer for b=0.1)
 - Peak Q_LV / Peak Q_RV = (a+x)/(a−x) ≈ 2.82 (quick-return ratio)
 - Total CO per ventricle is equal; the asymmetry is in the flow *profile*, not volume
+
+## `lv_fast` parameter
+All `teardrop_` files have `lv_fast = true` (boolean). Controls which physical stroke the LV bag sits on:
+- `true` → LV on fast stroke (phi~0, positive dtheta). Physiologically natural. Higher peak torque: `T_g_peak ∝ p_LV × x/(a−x)`.
+- `false` → LV on slow stroke (phi~180). Lower peak torque (~58% less for 120/25 mmHg): `T_g_peak ∝ p_LV × x/(a+x)`. Better for motor sizing.
+- Work per cycle is identical either way; only the peak torque/power changes.
+- When `lv_fast` is toggled, the ejection masks, flow signs, Tg signs, plot shading, and Figure 3 labels all update automatically.
+- `lv_fast` is meaningless at QR = 1 (both strokes symmetric).
 
 ## Gearbox torque full-cycle formula
 `T_g(φ) = T_p · x · (a·cos(φ) − x) / (a² − 2ax·cos(φ) + x²)` (virtual work derivation)
@@ -153,18 +163,11 @@ to `phipk`/`360−phipk`.)
 | 0.6x (4.56mm) | 11.80 | 0.89 | 20.39 | 5.91 |
 | 0.8x (6.08mm) | 8.20 | 0.69 | 14.16 | 4.11 |
 
-- `r1` is a strong lever: even `r1=0.2x` cuts the QR ratio by ~26% but costs
-  ~12% of α/SV/CO (SV scales linearly with α).
-- QR ratio **inverts around r1≈0.5x** — past that point the φ≈0 (LV) side
-  becomes the *slower* side, swapping which ventricle gets the quick stroke.
-Current params (x=9.9mm, a=28mm, b=0.5, r1=1.98mm=0.2x): α≈18.1°, QR≈1.5.
-
-- `r1` is a strong lever: even `r1=0.2x` cuts the QR ratio by ~26% but costs
-  ~12% of α/SV/CO (SV scales linearly with α).
-- QR ratio **inverts around r1≈0.5x** — past that point the φ≈0 (LV) side
-  becomes the *slower* side, swapping which ventricle gets the quick stroke.
-- Not yet done: re-tuning `x`/`a` alongside `r1` to recover α/SV/CO while
-  keeping the QR reduction.
+- `r1` is a strong lever: even `r1=0.2x` cuts the QR ratio by ~26% but costs ~12% of α/SV/CO (SV scales linearly with α).
+- QR ratio **inverts around r1≈0.5x** — past that point the φ≈0 side becomes the *slower* side.
+- **QR and α are coupled** — the teardrop arc both redistributes speed between strokes AND truncates total angular travel. Reducing QR always reduces α (and thus SV and CO). To target QR=1 you must compensate with larger L, w, or L_contact.
+- `teardrop_optimise` has no QR constraint. Options to add one: hard equality in `ceq`, tolerance band in `c`, or soft penalty in objective. QR=1 occurs around `f = r1/x ≈ 0.4–0.5`.
+- Not yet done: re-tuning `x`/`a` alongside `r1` to recover α/SV/CO while keeping the QR reduction.
 
 ### teardrop_theta() implementation pitfalls
 
@@ -195,12 +198,23 @@ present bug, now fixed in `paddle_teardrop_plot.m`.
 ## Files
 | File | Description |
 |------|-------------|
-| `paddle_angle_plot.m` | Main kinematic + flow rate plots, straight slot (2 figures) |
-| `paddle_angle_teardrop.m` | Teardrop r1 sweep: kinematics + flow rate (exploratory) |
-| `paddle_teardrop_plot.m` | Full teardrop dynamics at a single r1: kinematics, flow, torque, power (2 figures) |
-| `paddle_teardrop_optimise.m` | Optimises x,a,r1,L,w,L_contact for CO/power targets (teardrop) |
-| `paddle_mechanism_teardrop_viz.m` | Interactive animation of the teardrop mechanism with sliders |
-| `paddle_optimise.m` | Optimises x,a,L,w,L_contact for CO/power targets (straight slot) |
-| `tbh26_mechanism_v1.m` | Mechanism design analysis |
-| `appendix_d_ejection_calc.m` | Ejection calculations (Appendix D) |
-| `tbh27_mechanism_archived.m` | Previous iteration, archived |
+| `teardrop_plot.m` | Full teardrop dynamics at a single param set: kinematics, flow, torque, power (3 figures) |
+| `teardrop_sweep.m` | r1 sweep: kinematics + flow rate across r1 values |
+| `teardrop_optimise.m` | Optimises x,a,r1,L,w,L_contact for CO/power targets |
+| `teardrop_viz.m` | Interactive animation with sliders + live power overlay |
+| `teardrop_double_plot.m` | Full dynamics for double-teardrop slot variant |
+| `teardrop_double_sweep.m` | r1 sweep for double-teardrop variant |
+| `teardrop_double_optimise.m` | Optimiser for double-teardrop variant |
+| `teardrop_double_viz.m` | Interactive animation for double-teardrop variant |
+| `slot_plot.m` | Full dynamics, straight slot |
+| `slot_optimise.m` | Optimiser for straight slot |
+| `slot_viz.m` | Interactive animation, straight slot |
+
+### Parameters common to all teardrop_ files
+| Parameter | What it does |
+|-----------|-------------|
+| `p_LV_mmHg` | LV peak bag pressure (mmHg); default 120 |
+| `p_RV_mmHg` | RV peak bag pressure (mmHg); default 25 |
+| `lv_fast` | `true` = LV on fast stroke (phi~0); `false` = LV on slow stroke |
+| `r1` | Teardrop arc radius (mm); 0 = straight slot, must be < x |
+| `b` | Geometric bag overlap [0, 0.5] |
