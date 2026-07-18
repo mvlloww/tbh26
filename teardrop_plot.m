@@ -26,6 +26,9 @@ omega_gb = 2*pi / T;
 
 b = 0.5;   % Bag overlap [0, 0.5]: fill at theta=0 is (1-b)*100%
 
+lv_fast = true;   % true → LV on quick-return (fast) stroke near phi=0
+                  % false → LV on slow stroke near phi=180 (lower peak torque)
+
 %% Paddle geometry — tune these
 L         = 40;    % Paddle length (radial extent from pivot), mm
 w         = 70;      % Paddle width (out of plane), mm
@@ -85,13 +88,22 @@ dth_dphi_t    = interp1(phi_fine, dth_dphi_fine, phi_deg_t);  % dimensionless
 dtheta_dt_rad = dth_dphi_t * omega_gb;            % rad/s  (dth_dphi_t is dimensionless)
 dtheta_dt     = dtheta_dt_rad * (180/pi);         % °/s
 
-% Ejection masks
-lv_mask = (phi_deg_t >= phi_LV_start) | (phi_deg_t <= phi_pk);
-rv_mask = (phi_deg_t >= phi_RV_start) & (phi_deg_t <= 360 - phi_pk);
+% Physical ejection windows (fast = near phi=0, positive dtheta; slow = near phi=180)
+fast_mask = (phi_deg_t >= phi_LV_start) | (phi_deg_t <= phi_pk);
+slow_mask = (phi_deg_t >= phi_RV_start) & (phi_deg_t <= 360 - phi_pk);
+
+% Assign LV/RV based on lv_fast flag
+if lv_fast
+    lv_mask = fast_mask;  rv_mask = slow_mask;
+    sign_lv = +1;         sign_rv = -1;
+else
+    lv_mask = slow_mask;  rv_mask = fast_mask;
+    sign_lv = -1;         sign_rv = +1;
+end
 
 % Flow rate
-Q_LV    = max(0,  dtheta_dt_rad) .* double(lv_mask) * K_geom / 1000;   % mL/s
-Q_RV    = max(0, -dtheta_dt_rad) .* double(rv_mask) * K_geom / 1000;
+Q_LV    = max(0,  sign_lv * dtheta_dt_rad) .* double(lv_mask) * K_geom / 1000;   % mL/s
+Q_RV    = max(0,  sign_rv * dtheta_dt_rad) .* double(rv_mask) * K_geom / 1000;
 Q_total = Q_LV + Q_RV;
 
 % Paddle torque
@@ -108,8 +120,8 @@ Tp_total = Tp_LV - Tp_RV;
 
 % Gearbox torque: T_g = T_p × dθ/dφ  (virtual work, dimensionless ratio)
 dth_dphi_dless =  dtheta_dt_rad / omega_gb;
-Tg_LV =  Tp_mag_LV .* dth_dphi_dless .* double(lv_mask);
-Tg_RV = -Tp_mag_RV .* dth_dphi_dless .* double(rv_mask);
+Tg_LV = sign_lv * Tp_mag_LV .* dth_dphi_dless .* double(lv_mask);
+Tg_RV = sign_rv * Tp_mag_RV .* dth_dphi_dless .* double(rv_mask);
 Tg    = Tg_LV + Tg_RV;
 
 % Motor torque & power
@@ -119,13 +131,18 @@ P_mech      = Tm .* omega_motor;
 P_elec      = P_mech / e_motor;
 
 %% Ejection shading segments (ms)
-d_LV = phi_LV_start / 360;
-d_RV = phi_RV_start / 360;
-lv_segs = [0,          T * phi_pk/360;
-           T * d_LV,   T + T * phi_pk/360;
-           T + T*d_LV, 2*T              ] * 1000;
-rv_segs = [T * d_RV,   T * (360 - phi_pk)/360;
-           T + T*d_RV, T + T*(360 - phi_pk)/360] * 1000;
+d_fast = phi_LV_start / 360;
+d_slow = phi_RV_start / 360;
+fast_segs = [0,            T * phi_pk/360;
+             T * d_fast,   T + T * phi_pk/360;
+             T + T*d_fast, 2*T              ] * 1000;
+slow_segs = [T * d_slow,   T * (360 - phi_pk)/360;
+             T + T*d_slow, T + T*(360 - phi_pk)/360] * 1000;
+if lv_fast
+    lv_segs = fast_segs;  rv_segs = slow_segs;
+else
+    lv_segs = slow_segs;  rv_segs = fast_segs;
+end
 
 lv_col = [0.72 0.87 1.00];
 rv_col = [1.00 0.78 0.78];
@@ -342,9 +359,18 @@ sgtitle('Crank-and-Slotted-Arm LVAD — Forces & Torques (Teardrop Slot)', ...
 figure('Name','Crank vs Paddle Angle — Teardrop','Color','w','Position',[120 120 820 520]);
 hold on;
 
-xregion(0,            phi_pk,      'FaceColor',lv_col,'EdgeColor','none','FaceAlpha',0.75);
-xregion(phi_LV_start, 360,         'FaceColor',lv_col,'EdgeColor','none','FaceAlpha',0.75);
-xregion(phi_RV_start, 360-phi_pk,  'FaceColor',rv_col,'EdgeColor','none','FaceAlpha',0.75);
+if lv_fast
+    fast_col3 = lv_col;  slow_col3 = rv_col;
+    fast_lbl  = 'LV';    slow_lbl  = 'RV';
+    pk_col    = 'b';     pk2_col   = 'r';
+else
+    fast_col3 = rv_col;  slow_col3 = lv_col;
+    fast_lbl  = 'RV';    slow_lbl  = 'LV';
+    pk_col    = 'r';     pk2_col   = 'b';
+end
+xregion(0,            phi_pk,     'FaceColor',fast_col3,'EdgeColor','none','FaceAlpha',0.75);
+xregion(phi_LV_start, 360,        'FaceColor',fast_col3,'EdgeColor','none','FaceAlpha',0.75);
+xregion(phi_RV_start, 360-phi_pk, 'FaceColor',slow_col3,'EdgeColor','none','FaceAlpha',0.75);
 
 plot(phi_fine, theta_fine,'k-','LineWidth',2);
 
@@ -353,16 +379,16 @@ yline(-alpha,'r--','LineWidth',1.2,'Label',sprintf('-\\alpha = %.1f°',-alpha),'
 yline(0,'k:','LineWidth',0.8);
 
 xline(0,          'k--','LineWidth',1,'Label','0°',                         'LabelVerticalAlignment','bottom');
-xline(phi_pk,     'b:' ,'LineWidth',1,'Label',sprintf('%.1f°',phi_pk),      'LabelVerticalAlignment','bottom');
+xline(phi_pk,     [pk_col ':'] ,'LineWidth',1,'Label',sprintf('%.1f°',phi_pk),      'LabelVerticalAlignment','bottom');
 xline(180,        'k--','LineWidth',1,'Label','180°',                        'LabelVerticalAlignment','bottom');
-xline(360-phi_pk, 'r:' ,'LineWidth',1,'Label',sprintf('%.1f°',360-phi_pk),  'LabelVerticalAlignment','bottom');
+xline(360-phi_pk, [pk2_col ':'] ,'LineWidth',1,'Label',sprintf('%.1f°',360-phi_pk), 'LabelVerticalAlignment','bottom');
 xline(360,        'k--','LineWidth',1,'Label','360°',                        'LabelVerticalAlignment','bottom');
 
-xline(phi_RV_start,'r--','LineWidth',1,'Label',sprintf('RV start %.1f°',phi_RV_start),'LabelVerticalAlignment','top','LabelHorizontalAlignment','right');
-xline(phi_LV_start,'b--','LineWidth',1,'Label',sprintf('LV start %.1f°',phi_LV_start),'LabelVerticalAlignment','top','LabelHorizontalAlignment','right');
+xline(phi_RV_start,[pk2_col '--'],'LineWidth',1,'Label',sprintf('%s start %.1f°',slow_lbl,phi_RV_start),'LabelVerticalAlignment','top','LabelHorizontalAlignment','right');
+xline(phi_LV_start,[pk_col  '--'],'LineWidth',1,'Label',sprintf('%s start %.1f°',fast_lbl,phi_LV_start),'LabelVerticalAlignment','top','LabelHorizontalAlignment','right');
 
-plot(phi_pk,       alpha,'bs','MarkerFaceColor','b','MarkerSize',8);
-plot(360-phi_pk,  -alpha,'rs','MarkerFaceColor','r','MarkerSize',8);
+plot(phi_pk,      alpha,[pk_col  's'],'MarkerFaceColor',pk_col, 'MarkerSize',8);
+plot(360-phi_pk, -alpha,[pk2_col 's'],'MarkerFaceColor',pk2_col,'MarkerSize',8);
 
 hold off;
 xlabel('Crank Angle (°)'); ylabel('Paddle Angle (°)');
@@ -373,6 +399,11 @@ xticks(0:45:360);
 
 %% Console summary
 fprintf('=== Crank-and-Slotted-Arm LVAD — Teardrop Slot ===\n');
+if lv_fast
+    fprintf('  LV assignment:            fast stroke (phi~0°, high QR torque)\n');
+else
+    fprintf('  LV assignment:            slow stroke (phi~180°, lower peak torque)\n');
+end
 fprintf('  r1 = %.2f mm  (%.0f%% of x)\n', r1, 100*r1/x);
 fprintf('  Max paddle angle:         +/-%.2f deg  (straight slot: +/-%.2f)\n', alpha, asind(x/a));
 fprintf('  Crank angle at max:       %.1f deg  (straight slot: %.1f)\n', phi_pk, acosd(x/a));
