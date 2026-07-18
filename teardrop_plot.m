@@ -16,9 +16,9 @@
 clear; clc; close all;
 
 %% Mechanism parameters
-x   = 5.4;    % Crank arm length, mm
-a   = 32.2;     % Crank centre to fulcrum distance, mm
-r1  = 1.6;   % Teardrop arc radius, mm  (= 0.2x; set 0 for straight slot)
+x   = 7;    % Crank arm length, mm
+a   = 17;     % Crank centre to fulcrum distance, mm
+r1  = 1.3;   % Teardrop arc radius, mm  (= 0.2x; set 0 for straight slot)
 
 rpm_max  = 145;
 T        = 60 / rpm_max;
@@ -27,20 +27,24 @@ omega_gb = 2*pi / T;
 b = 0.5;   % Bag overlap [0, 0.5]: fill at theta=0 is (1-b)*100%
 
 %% Paddle geometry — tune these
-L         = 57.3;    % Paddle length (radial extent from pivot), mm
-w         = 75;      % Paddle width (out of plane), mm
+L         = 40;    % Paddle length (radial extent from pivot), mm
+w         = 70;      % Paddle width (out of plane), mm
 t_paddle  = 4;       % Paddle thickness (perpendicular to arm in mechanism plane), mm
-L_contact = 50;      % Contact length from tip of paddle, mm
+L_contact = 36;      % Contact length from tip of paddle, mm
 
 K_geom = w * (L^2 - (L - L_contact)^2) / 2;   % dV/dtheta, mm³/rad
 
 %% Torque / power chain
-p_bag   = 16e3;   % Blood bag pressure, Pa
-F_e     = 10;     % Bag elasticity force, N
-GR      = 62;     % Gear ratio
-e_gb    = 0.90;   % Gearbox efficiency
-e_mech  = 0.72;   % Mechanical efficiency
-e_motor = 0.83;   % Motor efficiency
+p_LV_mmHg = 120;    % LV peak bag pressure, mmHg
+p_RV_mmHg = 25;     % RV peak bag pressure, mmHg
+mmHg2Pa   = 133.322;
+p_LV      = p_LV_mmHg * mmHg2Pa;   % Pa
+p_RV      = p_RV_mmHg * mmHg2Pa;   % Pa
+F_e       = 10;     % Bag elasticity force, N (same for both)
+GR        = 62;     % Gear ratio
+e_gb      = 0.90;   % Gearbox efficiency
+e_mech    = 0.72;   % Mechanical efficiency
+e_motor   = 0.83;   % Motor efficiency
 
 %% Fine phi sweep (one cycle) — basis for all kinematics
 phi_fine        = linspace(0, 360, 1441);   % 0.25 deg resolution
@@ -91,19 +95,21 @@ Q_RV    = max(0, -dtheta_dt_rad) .* double(rv_mask) * K_geom / 1000;
 Q_total = Q_LV + Q_RV;
 
 % Paddle torque
-A_contact = w * L_contact * 1e-6;           % m²
-F_total   = p_bag * A_contact + F_e;        % N
-r_moment  = (L - L_contact/2) * 1e-3;      % m
-Tp_mag    = F_total * r_moment;             % N·m
+A_contact  = w * L_contact * 1e-6;              % m²
+F_total_LV = p_LV * A_contact + F_e;            % N
+F_total_RV = p_RV * A_contact + F_e;            % N
+r_moment   = (L - L_contact/2) * 1e-3;          % m
+Tp_mag_LV  = F_total_LV * r_moment;             % N·m
+Tp_mag_RV  = F_total_RV * r_moment;             % N·m
 
-Tp_LV    = Tp_mag * double(lv_mask);
-Tp_RV    = Tp_mag * double(rv_mask);
+Tp_LV    = Tp_mag_LV * double(lv_mask);
+Tp_RV    = Tp_mag_RV * double(rv_mask);
 Tp_total = Tp_LV - Tp_RV;
 
 % Gearbox torque: T_g = T_p × dθ/dφ  (virtual work, dimensionless ratio)
 dth_dphi_dless =  dtheta_dt_rad / omega_gb;
-Tg_LV =  Tp_mag .* dth_dphi_dless .* double(lv_mask);
-Tg_RV = -Tp_mag .* dth_dphi_dless .* double(rv_mask);
+Tg_LV =  Tp_mag_LV .* dth_dphi_dless .* double(lv_mask);
+Tg_RV = -Tp_mag_RV .* dth_dphi_dless .* double(rv_mask);
 Tg    = Tg_LV + Tg_RV;
 
 % Motor torque & power
@@ -219,9 +225,10 @@ end
 for i = 1:size(rv_segs,1)
     xregion(rv_segs(i,1), rv_segs(i,2),'FaceColor',rv_col,'EdgeColor','none','FaceAlpha',0.75);
 end
-plot(t*1000, F_total * double(lv_mask),'b-','LineWidth',2);
-plot(t*1000, F_total * double(rv_mask),'r-','LineWidth',2);
-yline(F_total,'k:','LineWidth',0.8,'Label',sprintf('F_{total} = %.1f N',F_total),'LabelHorizontalAlignment','left');
+plot(t*1000, F_total_LV * double(lv_mask),'b-','LineWidth',2);
+plot(t*1000, F_total_RV * double(rv_mask),'r-','LineWidth',2);
+yline(F_total_LV,'b:','LineWidth',0.8,'Label',sprintf('F_{LV} = %.1f N',F_total_LV),'LabelHorizontalAlignment','left');
+yline(F_total_RV,'r:','LineWidth',0.8,'Label',sprintf('F_{RV} = %.1f N',F_total_RV),'LabelHorizontalAlignment','left');
 yline(0,'k:','LineWidth',0.8);
 xline(T*1000,  'k--','LineWidth',1,'Label','Cycle 2','LabelVerticalAlignment','bottom');
 xline(2*T*1000,'k--','LineWidth',1,'Label','End',    'LabelVerticalAlignment','bottom');
@@ -229,7 +236,7 @@ hold off;
 ylabel('F_{total} (N)');
 title('F_{total} Applied to Paddle vs Time');
 legend({'LV','RV'},'Location','northeast');
-grid on; xlim([0 2*T*1000]); ylim([0, F_total*1.4]);
+grid on; xlim([0 2*T*1000]); ylim([0, F_total_LV*1.4]);
 ax4.FontSize = 10;
 
 ax5 = subplot(5,1,2);
@@ -311,11 +318,11 @@ grid on; xlim([0 2*T*1000]); ylim([0, max(P_elec)*1.25]);
 ax8.FontSize = 10;
 
 annotation('textbox',[0.72 0.01 0.26 0.32],'String',{
-    sprintf('p_{bag} = %g kPa  |  F_e = %g N', p_bag/1e3, F_e),
-    sprintf('A_{contact} = %.0f mm²', w*L_contact),
-    sprintf('F_{total} = %.1f N', F_total),
+    sprintf('p_{LV} = %g mmHg  |  p_{RV} = %g mmHg', p_LV_mmHg, p_RV_mmHg),
+    sprintf('F_e = %g N  |  A_{contact} = %.0f mm²', F_e, w*L_contact),
+    sprintf('F_{LV} = %.1f N  |  F_{RV} = %.1f N', F_total_LV, F_total_RV),
     sprintf('r_{moment} = %.0f mm', r_moment*1000),
-    sprintf('T_{p} = %.3f N·m', Tp_mag),
+    sprintf('T_{p,LV} = %.3f N·m  |  T_{p,RV} = %.3f N·m', Tp_mag_LV, Tp_mag_RV),
     sprintf('─────────────────────'),
     sprintf('T_{g,LV} = %.4f N·m  (numerical peak)', max(Tg_LV)),
     sprintf('T_{g,RV} = %.4f N·m  (numerical peak)', max(Tg_RV)),
@@ -383,12 +390,15 @@ fprintf('  Peak LV flow:             %.1f mL/s\n', max(Q_LV));
 fprintf('  Peak RV flow:             %.1f mL/s\n', max(Q_RV));
 fprintf('  Combined cardiac output:  %.2f L/min\n', CO);
 fprintf('  ─────────────────────────────────────\n');
-fprintf('  Bag pressure:             %g kPa\n', p_bag/1e3);
-fprintf('  F_total:                  %.1f N  (%.1f N pressure + %.1f N elastic)\n', F_total, p_bag*A_contact, F_e);
+fprintf('  LV pressure:              %g mmHg (%.1f kPa)\n', p_LV_mmHg, p_LV/1e3);
+fprintf('  RV pressure:              %g mmHg (%.1f kPa)\n', p_RV_mmHg, p_RV/1e3);
+fprintf('  F_total (LV):             %.1f N  (%.1f N pressure + %.1f N elastic)\n', F_total_LV, p_LV*A_contact, F_e);
+fprintf('  F_total (RV):             %.1f N  (%.1f N pressure + %.1f N elastic)\n', F_total_RV, p_RV*A_contact, F_e);
 fprintf('  Moment arm:               %.1f mm\n', r_moment*1000);
-fprintf('  Peak paddle torque T_p:   %.4f N·m\n', Tp_mag);
-fprintf('  Peak T_g (LV):           %.4f N·m  (straight slot: %.4f)\n', max(Tg_LV), x/(a-x)*Tp_mag);
-fprintf('  Peak T_g (RV):           %.4f N·m  (straight slot: %.4f)\n', max(Tg_RV), x/(a+x)*Tp_mag);
+fprintf('  Peak paddle torque T_p (LV): %.4f N·m\n', Tp_mag_LV);
+fprintf('  Peak paddle torque T_p (RV): %.4f N·m\n', Tp_mag_RV);
+fprintf('  Peak T_g (LV):           %.4f N·m  (straight slot: %.4f)\n', max(Tg_LV), x/(a-x)*Tp_mag_LV);
+fprintf('  Peak T_g (RV):           %.4f N·m  (straight slot: %.4f)\n', max(Tg_RV), x/(a+x)*Tp_mag_RV);
 fprintf('  T_g ratio LV/RV:         %.3f  (straight slot: %.3f)\n', max(Tg_LV)/max(Tg_RV), (a+x)/(a-x));
 fprintf('  ─────────────────────────────────────\n');
 fprintf('  GR = %g  |  e_gb = %.2f  |  e_mech = %.2f  |  e_motor = %.2f\n', GR, e_gb, e_mech, e_motor);
