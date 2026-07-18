@@ -22,15 +22,20 @@ t0   = 4;     % paddle thickness, mm
 phi  = 0;
 
 %% Physics for power overlay (w has no slider — fixed at analytical optimum)
-w_fixed  = 100;    % mm
-rpm_max  = 145;
-p_bag    = 16e3;   % Pa
-F_e      = 10;     % N
-e_gb     = 0.90;
-e_mech   = 0.72;
-e_motor  = 0.83;
-omega_gb = 2*pi*rpm_max/60;
-P_max    = 15.6;   % W budget
+w_fixed   = 100;    % mm
+rpm_max   = 145;
+p_LV_mmHg = 120;    % LV peak bag pressure, mmHg
+p_RV_mmHg = 25;     % RV peak bag pressure, mmHg
+mmHg2Pa   = 133.322;
+p_LV      = p_LV_mmHg * mmHg2Pa;   % Pa
+p_RV      = p_RV_mmHg * mmHg2Pa;   % Pa
+lv_fast   = true;   % true → LV on quick-return stroke; false → LV on slow stroke
+F_e       = 10;     % N
+e_gb      = 0.90;
+e_mech    = 0.72;
+e_motor   = 0.83;
+omega_gb  = 2*pi*rpm_max/60;
+P_max     = 15.6;   % W budget
 
 %% UI
 fig = uifigure('Name','Teardrop Slot Mechanism','Position',[100 100 1280 580]);
@@ -250,13 +255,22 @@ redraw();
         set(hTxtRV, 'Position',[rcen(1) rcen(2) 0], 'String',sprintf('V = %.0f%%',fRV*100));
 
         %% Power curve
-        phi_v  = (0:2:360)';
-        th_v   = arrayfun(@(p) td_theta(p, xv, av, r1v), phi_v);
-        dth_v  = gradient(th_v, phi_v) * omega_gb;      % rad/s (deg/deg dimensionless × rad/s)
-        LV_ej  = (th_v > -gd) & (dth_v > 0);
-        RV_ej  = (th_v <  gd) & (dth_v < 0);
-        Tp_v   = (p_bag * w_fixed*Lcv*1e-6 + F_e) * (Lv - Lcv/2)*1e-3;
-        P_v    = Tp_v * abs(dth_v) .* double(LV_ej | RV_ej) / (e_gb*e_mech*e_motor);
+        phi_v   = (0:2:360)';
+        th_v    = arrayfun(@(p) td_theta(p, xv, av, r1v), phi_v);
+        dth_v   = gradient(th_v, phi_v) * omega_gb;     % rad/s
+        fast_ej = (th_v > -gd) & (dth_v > 0);          % fast stroke (phi~0, dtheta>0)
+        slow_ej = (th_v <  gd) & (dth_v < 0);          % slow stroke (phi~180, dtheta<0)
+        if lv_fast
+            LV_ej = fast_ej;  RV_ej = slow_ej;
+        else
+            LV_ej = slow_ej;  RV_ej = fast_ej;
+        end
+        A_c    = w_fixed * Lcv * 1e-6;
+        rm     = (Lv - Lcv/2) * 1e-3;
+        Tp_LV  = (p_LV * A_c + F_e) * rm;
+        Tp_RV  = (p_RV * A_c + F_e) * rm;
+        P_v    = (Tp_LV * abs(dth_v) .* double(LV_ej) + ...
+                  Tp_RV * abs(dth_v) .* double(RV_ej)) / (e_gb*e_mech*e_motor);
         T_pd   = 60/rpm_max*1000;
         t_v    = phi_v / 360 * T_pd;
         t_now  = phi   / 360 * T_pd;

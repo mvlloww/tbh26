@@ -14,13 +14,18 @@
 clear; clc;
 
 %% Fixed parameters (match paddle_optimise.m)
-rpm_max = 145;
-b       = 0.5;
-p_bag   = 16e3;      % Pa
-F_e     = 10;        % N (elastic restoring force)
-e_gb    = 0.90;
-e_mech  = 0.72;
-e_motor = 0.83;
+rpm_max   = 145;
+b         = 0.5;
+p_LV_mmHg = 120;     % LV peak bag pressure, mmHg
+p_RV_mmHg = 25;      % RV peak bag pressure, mmHg
+mmHg2Pa   = 133.322;
+p_LV      = p_LV_mmHg * mmHg2Pa;   % Pa
+p_RV      = p_RV_mmHg * mmHg2Pa;   % Pa
+lv_fast   = true;    % true → LV on quick-return stroke; false → LV on slow stroke
+F_e       = 10;      % N (elastic restoring force)
+e_gb      = 0.90;
+e_mech    = 0.72;
+e_motor   = 0.83;
 
 omega_gb  = 2*pi*rpm_max/60;
 CO_target = 5;       % L/min per ventricle
@@ -47,7 +52,7 @@ bb = [-1; -L_paddle_pin_radius];
 
 objective = @(v) size_weight * (v(2) + v(4)) + lambda * kink_penalty(v, phi_deg);
 nonlcon   = @(v) nlcon(v, b, rpm_max, CO_target, alpha_min, phi_deg, ...
-                       omega_gb, e_gb, e_mech, e_motor, p_bag, F_e, P_max);
+                       omega_gb, e_gb, e_mech, e_motor, p_LV, p_RV, lv_fast, F_e, P_max);
 
 %% Multi-start seeds
 v0_list = {
@@ -81,14 +86,14 @@ dth_o    = gradient(theta_o, phi_deg);
 alpha_o  = max(theta_o);
 qr_o     = max(dth_o) / max(-dth_o);
 co_o     = co_calc(v_opt, b, rpm_max, phi_deg);
-P_elec_o = p_elec_peak(v_opt, omega_gb, e_gb, e_mech, e_motor, p_bag, F_e, phi_deg);
+P_elec_o = p_elec_peak(v_opt, omega_gb, e_gb, e_mech, e_motor, p_LV, p_RV, lv_fast, F_e, phi_deg);
 kink_o   = kink_penalty(v_opt, phi_deg);
 
 % Comparison: straight slot at same L/w/Lc (r1=0)
 v_str    = [xo, ao, 0, Lo, wo, Lco];
 alpha_str = asind(xo/ao);
 qr_str    = (ao+xo) / (ao-xo);
-p_str     = p_elec_peak(v_str, omega_gb, e_gb, e_mech, e_motor, p_bag, F_e, phi_deg);
+p_str     = p_elec_peak(v_str, omega_gb, e_gb, e_mech, e_motor, p_LV, p_RV, lv_fast, F_e, phi_deg);
 co_str    = co_calc(v_str, b, rpm_max, phi_deg);
 kink_str  = kink_penalty(v_str, phi_deg);
 
@@ -121,16 +126,23 @@ fprintf('  P_elec_peak = %.3f W  (%s)\n', p_str, s_st);
 fprintf('  kink        = %.4f deg/deg\n', kink_str);
 
 %% ===================================================================
-function P = p_elec_peak(v, omega_gb, e_gb, e_mech, e_motor, p_bag, F_e, phi_deg)
+function P = p_elec_peak(v, omega_gb, e_gb, e_mech, e_motor, p_LV, p_RV, lv_fast, F_e, phi_deg)
     [x, ~, f, L, w, Lc] = unpack(v);
     r1 = f * x;
     theta      = teardrop_theta(phi_deg, x, v(2), r1);
-    peak_rate  = max(abs(gradient(theta, phi_deg)));   % max |dθ/dφ|, dimensionless
-    A_contact  = w * Lc * 1e-6;                       % m²
-    F_total    = p_bag * A_contact + F_e;             % N
-    r_moment   = (L - Lc/2) * 1e-3;                   % m
-    Tp         = F_total * r_moment;                  % N·m
-    P_mech     = Tp * peak_rate * omega_gb / (e_gb * e_mech);
+    dth        = gradient(theta, phi_deg);
+    peak_fast  = max(dth);                            % fast stroke (phi~0), dimensionless
+    peak_slow  = max(-dth);                           % slow stroke (phi~180), dimensionless
+    A_contact  = w * Lc * 1e-6;                      % m²
+    if lv_fast
+        F_fast = p_LV * A_contact + F_e;
+        F_slow = p_RV * A_contact + F_e;
+    else
+        F_fast = p_RV * A_contact + F_e;
+        F_slow = p_LV * A_contact + F_e;
+    end
+    r_moment   = (L - Lc/2) * 1e-3;                 % m
+    P_mech     = max(F_fast * peak_fast, F_slow * peak_slow) * r_moment * omega_gb / (e_gb * e_mech);
     P          = P_mech / e_motor;
 end
 
@@ -145,13 +157,13 @@ function CO = co_calc(v, b, rpm_max, phi_deg)
 end
 
 function [c, ceq] = nlcon(v, b, rpm_max, CO_target, alpha_min, phi_deg, ...
-                          omega_gb, e_gb, e_mech, e_motor, p_bag, F_e, P_max)
+                          omega_gb, e_gb, e_mech, e_motor, p_LV, p_RV, lv_fast, F_e, P_max)
     [x, a, f, ~, ~, ~] = unpack(v);
     r1    = f * x;
     theta = teardrop_theta(phi_deg, x, a, r1);
     alpha = max(theta);
     CO    = co_calc(v, b, rpm_max, phi_deg);
-    P     = p_elec_peak(v, omega_gb, e_gb, e_mech, e_motor, p_bag, F_e, phi_deg);
+    P     = p_elec_peak(v, omega_gb, e_gb, e_mech, e_motor, p_LV, p_RV, lv_fast, F_e, phi_deg);
     ceq   = [];
     c     = [alpha_min - alpha;
              CO - 1.0*CO_target;

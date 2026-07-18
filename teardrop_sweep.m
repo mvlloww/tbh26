@@ -58,8 +58,9 @@ end
 qr_orig = max(dth_orig) / max(-dth_orig);
 
 %% Bag overlap & flow-rate parameters (unchanged from paddle_angle_plot.m)
-b       = 0.5;     % Bag overlap [0,0.5]: fill at theta=0 is (1-b)*100%
-rpm_max = 145;
+b        = 0.5;     % Bag overlap [0,0.5]: fill at theta=0 is (1-b)*100%
+lv_fast  = true;    % true → LV on quick-return stroke; false → LV on slow stroke
+rpm_max  = 145;
 T       = 60 / rpm_max;
 omega_gb = 2*pi / T;
 
@@ -118,13 +119,13 @@ grid on; xlim([0 360]); xticks(0:45:360);
 t     = linspace(0, T, 1000);
 phi_t = mod(omega_gb*t*180/pi, 360);
 
-[Q_LV_o, Q_RV_o] = flow_rate(phi_deg, theta_orig, phi_pk, phi_LV_start_orig, phi_RV_start_orig, omega_gb, K_geom, phi_t);
+[Q_LV_o, Q_RV_o] = flow_rate(phi_deg, theta_orig, phi_pk, phi_LV_start_orig, phi_RV_start_orig, omega_gb, K_geom, phi_t, lv_fast);
 
 Q_LV_sweep = zeros(numel(r1_vals), numel(t));
 Q_RV_sweep = zeros(numel(r1_vals), numel(t));
 for i = 1:numel(r1_vals)
     [Q_LV_sweep(i,:), Q_RV_sweep(i,:)] = ...
-        flow_rate(phi_deg, theta_sweep(i,:), phipk_new(i), phi_LV_start(i), phi_RV_start(i), omega_gb, K_geom, phi_t);
+        flow_rate(phi_deg, theta_sweep(i,:), phipk_new(i), phi_LV_start(i), phi_RV_start(i), omega_gb, K_geom, phi_t, lv_fast);
 end
 
 figure('Name','Teardrop Slot — Flow Rate','Color','w','Position',[120 120 900 650]);
@@ -274,14 +275,22 @@ function phi_out = solve_phi_for_theta(phi_seg, theta_seg, theta_target)
     phi_out = interp1(theta_seg, phi_seg, theta_target);
 end
 
-function [Q_LV, Q_RV] = flow_rate(phi_deg, theta, phipk_i, phi_LV_start, phi_RV_start, omega_gb, K_geom, phi_t)
+function [Q_LV, Q_RV] = flow_rate(phi_deg, theta, phipk_i, phi_LV_start, phi_RV_start, omega_gb, K_geom, phi_t, lv_fast)
     dth   = gradient(theta, phi_deg);          % dtheta/dphi, dimensionless
     dth_t = interp1(phi_deg, dth, phi_t);
     dtheta_dt = omega_gb * dth_t;              % rad/s
 
-    lv_mask = (phi_t >= phi_LV_start) | (phi_t <= phipk_i);
-    rv_mask = (phi_t >= phi_RV_start) & (phi_t <= 360-phipk_i);
+    fast_mask = (phi_t >= phi_LV_start) | (phi_t <= phipk_i);
+    slow_mask = (phi_t >= phi_RV_start) & (phi_t <= 360-phipk_i);
 
-    Q_LV = max(0,  dtheta_dt) .* lv_mask * K_geom / 1000;
-    Q_RV = max(0, -dtheta_dt) .* rv_mask * K_geom / 1000;
+    if lv_fast
+        lv_mask = fast_mask;  rv_mask = slow_mask;
+        sign_lv = +1;         sign_rv = -1;
+    else
+        lv_mask = slow_mask;  rv_mask = fast_mask;
+        sign_lv = -1;         sign_rv = +1;
+    end
+
+    Q_LV = max(0,  sign_lv * dtheta_dt) .* lv_mask * K_geom / 1000;
+    Q_RV = max(0,  sign_rv * dtheta_dt) .* rv_mask * K_geom / 1000;
 end
