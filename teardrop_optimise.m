@@ -9,7 +9,15 @@
 %   lambda      — W/(deg/deg kink); raise to prefer smooth power profiles
 %
 % Design vector v = [x, a, f, L, w, L_contact]
-%   f = r1/x in [0.05, 0.9]: r1=f*x is the teardrop arc radius
+%   f = r2/x in [0.05, 0.9]: r2=f*x is the teardrop (wall) radius
+%
+% r1 = crank pin radius (fixed). The pin's CENTRE doesn't ride on the wall
+% itself -- it stays a constant distance r1 inside it. So the kinematics
+% (theta(phi)) are driven by the effective arc radius r_eff = r2 - r1 (the
+% pin centre's own path), not r2 directly. r2 = r1 (smallest wall that can
+% even contain the pin) gives r_eff = 0 -- i.e. zero teardrop effect,
+% identical to the pure straight slot. Any real quick-return benefit
+% requires r2 > r1 by more than a hair.
 
 clear; clc;
 
@@ -21,18 +29,19 @@ p_RV_mmHg = 25;      % RV peak bag pressure, mmHg
 mmHg2Pa   = 133.322;
 p_LV      = p_LV_mmHg * mmHg2Pa;   % Pa
 p_RV      = p_RV_mmHg * mmHg2Pa;   % Pa
-lv_fast   = true;    % true → LV on quick-return stroke; false → LV on slow stroke
+lv_fast   = false;    % true → LV on quick-return stroke; false → LV on slow stroke
 F_e       = 10;      % N (elastic restoring force)
 e_gb      = 0.90;
 e_mech    = 0.72;
 e_motor   = 0.83;
 
 omega_gb  = 2*pi*rpm_max/60;
-CO_target = 5;       % L/min per ventricle
+CO_target = 6;       % L/min per ventricle
 P_max     = 15.6;    % W power budget
 alpha_min          = 8;   % deg — floor for teardrop (≤8° pushes Lc to its 50mm bound)
 L_paddle_pin_radius = 3;  % mm — inner edge of contact zone must clear the pivot pin
 t_paddle            = 4;  % mm — paddle body thickness (perpendicular to arm in mechanism plane)
+r1                  = 2;  % mm — crank pin radius (fixed); r2 cannot be smaller than this
 
 lambda      = 100;  % smoothness weight (W per deg/deg kink)
 size_weight = 0.2;  % W/mm — penalises a + L; raise to push harder for compact geometry
@@ -50,9 +59,9 @@ A  = [1 -1  0  0 0 0;
       0  0  0 -1 0 1];
 bb = [-1; -L_paddle_pin_radius];
 
-objective = @(v) size_weight * (v(2) + v(4)) + lambda * kink_penalty(v, phi_deg);
+objective = @(v) size_weight * (v(2) + v(4)) + lambda * kink_penalty(v, phi_deg, r1);
 nonlcon   = @(v) nlcon(v, b, rpm_max, CO_target, alpha_min, phi_deg, ...
-                       omega_gb, e_gb, e_mech, e_motor, p_LV, p_RV, lv_fast, F_e, P_max);
+                       omega_gb, e_gb, e_mech, e_motor, p_LV, p_RV, lv_fast, F_e, P_max, r1);
 
 %% Multi-start seeds
 v0_list = {
@@ -79,23 +88,30 @@ fprintf('Best seed gives obj = %.3f; refining with display:\n\n', obj_best);
 
 %% Unpack and report
 [xo, ao, fo, Lo, wo, Lco] = unpack(v_opt);
-r1o = fo * xo;
+r2o    = fo * xo;
+r_effo = r2o - r1;
 
-theta_o  = teardrop_theta(phi_deg, xo, ao, r1o);
+theta_o  = teardrop_theta(phi_deg, xo, ao, r_effo);
 dth_o    = gradient(theta_o, phi_deg);
 alpha_o  = max(theta_o);
 qr_o     = max(dth_o) / max(-dth_o);
-co_o     = co_calc(v_opt, b, rpm_max, phi_deg);
-P_elec_o = p_elec_peak(v_opt, omega_gb, e_gb, e_mech, e_motor, p_LV, p_RV, lv_fast, F_e, phi_deg);
-kink_o   = kink_penalty(v_opt, phi_deg);
+co_o     = co_calc(v_opt, b, rpm_max, phi_deg, r1);
+P_elec_o = p_elec_peak(v_opt, omega_gb, e_gb, e_mech, e_motor, p_LV, p_RV, lv_fast, F_e, phi_deg, r1);
+kink_o   = kink_penalty(v_opt, phi_deg, r1);
 
-% Comparison: straight slot at same L/w/Lc (r1=0)
-v_str    = [xo, ao, 0, Lo, wo, Lco];
-alpha_str = asind(xo/ao);
-qr_str    = (ao+xo) / (ao-xo);
-p_str     = p_elec_peak(v_str, omega_gb, e_gb, e_mech, e_motor, p_LV, p_RV, lv_fast, F_e, phi_deg);
-co_str    = co_calc(v_str, b, rpm_max, phi_deg);
-kink_str  = kink_penalty(v_str, phi_deg);
+% Comparison: minimum-feasible slot at same L/w/Lc (r2 = r1, the smallest
+% wall that can even contain the pin). This gives r_eff = 0 -- i.e. the
+% smallest buildable teardrop has ZERO kinematic effect and is identical
+% to the pure straight slot; any real quick-return benefit needs r2 > r1.
+r2_min    = r1;
+v_str     = [xo, ao, r2_min/xo, Lo, wo, Lco];
+theta_str = teardrop_theta(phi_deg, xo, ao, r2_min - r1);
+dth_str   = gradient(theta_str, phi_deg);
+alpha_str = max(theta_str);
+qr_str    = max(dth_str) / max(-dth_str);
+p_str     = p_elec_peak(v_str, omega_gb, e_gb, e_mech, e_motor, p_LV, p_RV, lv_fast, F_e, phi_deg, r1);
+co_str    = co_calc(v_str, b, rpm_max, phi_deg, r1);
+kink_str  = kink_penalty(v_str, phi_deg, r1);
 
 if P_elec_o <= P_max, s_td = 'within budget'; else, s_td = 'OVER BUDGET'; end
 if p_str    <= P_max, s_st = 'within budget'; else, s_st = 'OVER BUDGET'; end
@@ -103,7 +119,8 @@ if p_str    <= P_max, s_st = 'within budget'; else, s_st = 'OVER BUDGET'; end
 fprintf('\n=== Optimised Teardrop Mechanism  (size_weight=%.2f  lambda=%.0f) ===\n', size_weight, lambda);
 fprintf('  x         = %.3f mm\n', xo);
 fprintf('  a         = %.3f mm\n', ao);
-fprintf('  f = r1/x  = %.3f  ->  r1 = %.3f mm\n', fo, r1o);
+fprintf('  f = r2/x  = %.3f  ->  r2 = %.3f mm  (floor %.1f = r1, crank pin radius; r_eff = %.3f mm)\n', ...
+    fo, r2o, r1, r_effo);
 fprintf('  L         = %.3f mm\n', Lo);
 fprintf('  w         = %.3f mm\n', wo);
 fprintf('  L_contact = %.3f mm\n', Lco);
@@ -113,12 +130,12 @@ fprintf('  QR ratio    = %.3f\n', qr_o);
 fprintf('  CO          = %.3f L/min/ventricle  (target %.1f)\n', co_o, CO_target);
 fprintf('  P_elec_peak = %.3f W  (%s)\n', P_elec_o, s_td);
 fprintf('  kink        = %.4f deg/deg\n', kink_o);
-Di_slot = 2*xo - r1o;
-Tx_slot = r1o * sqrt(max(Di_slot^2 - r1o^2, 0)) / Di_slot;
+Di_slot = 2*xo - r_effo;
+Tx_slot = r2o * sqrt(max(Di_slot^2 - r_effo^2, 0)) / Di_slot;   % actual wall half-width (not r_eff)
 warn_t  = ''; if t_paddle < 2*Tx_slot; warn_t = '  *** TOO THIN ***'; end
 fprintf('  t_paddle    = %.1f mm  (slot half-width Tx=%.2f mm, min t=%.1f mm)%s\n', ...
     t_paddle, Tx_slot, 2*Tx_slot, warn_t);
-fprintf('\n=== Same L/w/Lc at r1=0 (straight slot) ===\n');
+fprintf('\n=== Same L/w/Lc at r2=%.1fmm (min-feasible, crank pin limit) ===\n', r1);
 fprintf('  alpha       = %.2f deg\n', alpha_str);
 fprintf('  QR ratio    = %.3f\n', qr_str);
 fprintf('  CO          = %.3f L/min/ventricle\n', co_str);
@@ -126,10 +143,11 @@ fprintf('  P_elec_peak = %.3f W  (%s)\n', p_str, s_st);
 fprintf('  kink        = %.4f deg/deg\n', kink_str);
 
 %% ===================================================================
-function P = p_elec_peak(v, omega_gb, e_gb, e_mech, e_motor, p_LV, p_RV, lv_fast, F_e, phi_deg)
+function P = p_elec_peak(v, omega_gb, e_gb, e_mech, e_motor, p_LV, p_RV, lv_fast, F_e, phi_deg, r1)
     [x, ~, f, L, w, Lc] = unpack(v);
-    r1 = f * x;
-    theta      = teardrop_theta(phi_deg, x, v(2), r1);
+    r2     = f * x;
+    r_eff  = r2 - r1;
+    theta      = teardrop_theta(phi_deg, x, v(2), r_eff);
     dth        = gradient(theta, phi_deg);
     peak_fast  = max(dth);                            % fast stroke (phi~0), dimensionless
     peak_slow  = max(-dth);                           % slow stroke (phi~180), dimensionless
@@ -146,10 +164,11 @@ function P = p_elec_peak(v, omega_gb, e_gb, e_mech, e_motor, p_LV, p_RV, lv_fast
     P          = P_mech / e_motor;
 end
 
-function CO = co_calc(v, b, rpm_max, phi_deg)
+function CO = co_calc(v, b, rpm_max, phi_deg, r1)
     [x, ~, f, L, w, Lc] = unpack(v);
-    r1     = f * x;
-    theta  = teardrop_theta(phi_deg, x, v(2), r1);
+    r2     = f * x;
+    r_eff  = r2 - r1;
+    theta  = teardrop_theta(phi_deg, x, v(2), r_eff);
     alpha  = max(theta);                                    % deg
     K_geom = w * (L^2 - (L-Lc)^2) / 2;                   % mm³/rad (deg/deg cancel)
     SV     = K_geom * alpha * pi/180 / (1000*(1-b));      % mL
@@ -157,23 +176,27 @@ function CO = co_calc(v, b, rpm_max, phi_deg)
 end
 
 function [c, ceq] = nlcon(v, b, rpm_max, CO_target, alpha_min, phi_deg, ...
-                          omega_gb, e_gb, e_mech, e_motor, p_LV, p_RV, lv_fast, F_e, P_max)
+                          omega_gb, e_gb, e_mech, e_motor, p_LV, p_RV, lv_fast, F_e, P_max, r1)
     [x, a, f, ~, ~, ~] = unpack(v);
-    r1    = f * x;
-    theta = teardrop_theta(phi_deg, x, a, r1);
+    r2    = f * x;
+    r_eff = r2 - r1;
+    theta = teardrop_theta(phi_deg, x, a, r_eff);
     alpha = max(theta);
-    CO    = co_calc(v, b, rpm_max, phi_deg);
-    P     = p_elec_peak(v, omega_gb, e_gb, e_mech, e_motor, p_LV, p_RV, lv_fast, F_e, phi_deg);
+    CO    = co_calc(v, b, rpm_max, phi_deg, r1);
+    P     = p_elec_peak(v, omega_gb, e_gb, e_mech, e_motor, p_LV, p_RV, lv_fast, F_e, phi_deg, r1);
     ceq   = [];
     c     = [alpha_min - alpha;
              CO - 1.0*CO_target;
              1.0*CO_target - CO;
-             P - P_max];
+             P - P_max;
+             r1 - r2];
 end
 
-function k = kink_penalty(v, phi_deg)
+function k = kink_penalty(v, phi_deg, r1)
     [x, ~, f, ~, ~, ~] = unpack(v);
-    theta = teardrop_theta(phi_deg, x, v(2), f*x);
+    r2    = f * x;
+    r_eff = r2 - r1;
+    theta = teardrop_theta(phi_deg, x, v(2), r_eff);
     dth   = gradient(theta, phi_deg);
     k     = max(abs(diff(dth)));
 end
@@ -182,21 +205,23 @@ function [x, a, f, L, w, Lc] = unpack(v)
     x = v(1); a = v(2); f = v(3); L = v(4); w = v(5); Lc = v(6);
 end
 
-function theta = teardrop_theta(phi_deg, x, a, r1)
+function theta = teardrop_theta(phi_deg, x, a, r_arc)
 % theta(phi) for the teardrop-slot (vectorised). Mirrors teardrop_theta()
-% in paddle_angle_teardrop.m; f=0 (r1=0) recovers the straight-slot formula.
+% in paddle_angle_teardrop.m; r_arc=0 recovers the straight-slot formula.
+% r_arc is the pin CENTRE's effective arc radius (r_eff = r2 - r1), not the
+% wall's own radius r2 -- see header comment.
     theta_o = atand(x*sind(phi_deg) ./ (a - x*cosd(phi_deg)));
-    if r1 < 1e-9
+    if r_arc < 1e-9
         theta = theta_o;  return;
     end
     y  = a - x;
-    ci = y + r1;
-    Di = 2*x - r1;
+    ci = y + r_arc;
+    Di = 2*x - r_arc;
     if Di <= 0
         theta = theta_o;  return;
     end
-    Tx  = r1 * sqrt(max(Di^2 - r1^2, 0)) / Di;   % scalar
-    Ty  = ci + r1^2 / Di;                          % scalar
+    Tx  = r_arc * sqrt(max(Di^2 - r_arc^2, 0)) / Di;   % scalar
+    Ty  = ci + r_arc^2 / Di;                          % scalar
     R_T = hypot(Tx, Ty);                           % scalar
 
     R    = sqrt(a^2 + x^2 - 2*a*x*cosd(phi_deg)); % array
@@ -204,15 +229,15 @@ function theta = teardrop_theta(phi_deg, x, a, r1)
     sgn  = ones(size(phi_deg));
     sgn(phi_deg > 180) = -1;
 
-    % Arc branch: pin rides the r1 arc (R <= R_T, near phi=0/360)
+    % Arc branch: pin-centre rides the r_arc arc (R <= R_T, near phi=0/360)
     arc = R <= R_T;
     if any(arc)
-        Yp = (R(arc).^2 - r1^2 + ci^2) / (2*ci);
+        Yp = (R(arc).^2 - r_arc^2 + ci^2) / (2*ci);
         Xp = sqrt(max(R(arc).^2 - Yp.^2, 0));
         beta(arc) = atan2d(sgn(arc).*Xp, Yp);
     end
 
-    % Tangent-line branch: pin rides the straight slot wall (R > R_T)
+    % Tangent-line branch: pin-centre rides the straight path (R > R_T)
     lin = ~arc;
     if any(lin)
         Ay  = a + x;

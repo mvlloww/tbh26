@@ -3,8 +3,17 @@ function paddle_mechanism_teardrop_viz
 % LVAD paddle mechanism (geometry mirrors paddle_angle_teardrop.m).
 %
 % The teardrop replaces the sharp pivot-end of the radial slot with an arc
-% of radius r1, reducing the quick-return ratio. Drag sliders to change
+% of radius r2, reducing the quick-return ratio. Drag sliders to change
 % parameters; press Play to animate through a full crank revolution.
+%
+% r1 = crank pin radius (fixed, physical property of the pin).
+% r2 = teardrop radius (the actual slot's rounded near-pivot wall).
+% The pin's CENTRE does not ride on the wall itself — it stays a constant
+% distance r1 inside it. So the kinematics (theta(phi)) are driven by the
+% effective arc radius r_eff = r2 - r1 (the pin centre's own path), while
+% the drawn slot wall is that same shape scaled outward by r2/r_eff about
+% the arc centre. This is why the wall's sharp tip sits beyond a+x — a
+% finite pin can never get its centre all the way into a mathematical point.
 %
 % Frame: fulcrum F at origin, crank centre C at (a,0).
 % Crank pin P = (a - x*cos(phi), x*sin(phi))  [unchanged by slot shape].
@@ -12,14 +21,15 @@ function paddle_mechanism_teardrop_viz
 % the pin rides the arc (near phi = 0 / 360).
 
 %% Default parameters  (match paddle_angle_teardrop.m)
-x0   = 5.4;
-a0   = 32;
-r1_0 = 1.6;   % 1.52 mm
-L0   = 57;
-Lc0  = 50;
-b0   = 0.5;
-t0   = 4;     % paddle thickness, mm
-phi  = 0;
+r1    = 2;      % Crank pin radius, mm — fixed physical property of the pin
+x0    = 5.4;
+a0    = 32;
+r2_0  = 2*r1;   % teardrop (wall) radius; gives r_eff = r1 at startup
+L0    = 57;
+Lc0   = 50;
+b0    = 0.5;
+t0    = 4;     % paddle thickness, mm
+phi   = 0;
 
 %% Physics for power overlay (w has no slider — fixed at analytical optimum)
 w_fixed   = 100;    % mm
@@ -52,7 +62,7 @@ title(ax2,'Electrical Input Power');
 %% Sliders  (7 rows, 60 px apart)
 [lbl_x,   sld_x]   = mkSlider(580, 445, 'x',   [2   15],   x0);
 [lbl_a,   sld_a]   = mkSlider(580, 385, 'a',   [15  40],   a0);
-[lbl_r1,  sld_r1]  = mkSlider(580, 325, 'r1',  [0    6],   r1_0);
+[lbl_r2,  sld_r2]  = mkSlider(580, 325, 'r2',  [1.3*r1  8],   r2_0);
 [lbl_L,   sld_L]   = mkSlider(580, 265, 'L',   [10  80],   L0);
 [lbl_Lc,  sld_Lc]  = mkSlider(580, 205, 'Lc',  [1   60],   Lc0);
 [lbl_b,   sld_b]   = mkSlider(580, 145, 'b',   [0  0.5],   b0);
@@ -91,10 +101,12 @@ hFulc   = plot(ax, NaN, NaN, 'ko',  'MarkerFaceColor','k','MarkerSize',8);
 hCC     = plot(ax, NaN, NaN, 'bo',  'MarkerFaceColor','b','MarkerSize',8);
 hPin    = plot(ax, NaN, NaN, 'ys',  'MarkerFaceColor','y','MarkerSize',8, ...
                'MarkerEdgeColor','b');
+hPinCirc = patch(ax, NaN(60,1), NaN(60,1), [1.00 0.85 0.10], ...
+                'FaceAlpha',0.7,'EdgeColor',[0.55 0.40 0],'LineWidth',1.2);
 
-legend(ax, [hPaddle, hCtact, hSlot, hCrank, hBagLV, hBagRV], ...
+legend(ax, [hPaddle, hCtact, hSlot, hCrank, hBagLV, hBagRV, hPinCirc], ...
     {'Paddle (pivot\rightarrowtip)','Contact zone','Teardrop slot', ...
-     'Crank arm','LV bag','RV bag'}, ...
+     'Crank arm','LV bag','RV bag','Crank pin (actual size)'}, ...
     'Location','southoutside');
 
 T_pd0 = 60/rpm_max*1000;
@@ -121,8 +133,8 @@ redraw();
         switch name
             case 'x',   lbl.Text = sprintf('Crank arm        x   = %.1f mm',  val);
             case 'a',   lbl.Text = sprintf('Crank\x2013pivot  a   = %.1f mm',  val);
-            case 'r1',  lbl.Text = sprintf('Teardrop radius  r1  = %.2f mm  (%.0f%% of x)', ...
-                                           val, 100*val/max(eps, sld_x.Value));
+            case 'r2',  lbl.Text = sprintf('Teardrop radius  r2  = %.2f mm  (pin r1=%.1f, clearance r_{eff}=%.2f)', ...
+                                           val, r1, val-r1);
             case 'L',   lbl.Text = sprintf('Paddle length    L   = %.1f mm',  val);
             case 'Lc',  lbl.Text = sprintf('Contact length   Lc  = %.1f mm',  val);
             case 'b',   lbl.Text = sprintf('Bag overlap      b   = %.2f  (fill %.0f%%)', ...
@@ -156,9 +168,10 @@ redraw();
     end
 
     function redraw()
-        xv  = sld_x.Value;
-        av  = sld_a.Value;
-        r1v = min(sld_r1.Value, 0.95*xv);   % r1 must be < x
+        xv    = sld_x.Value;
+        av    = sld_a.Value;
+        r2v   = max(1.3*r1, min(sld_r2.Value, r1 + 0.95*xv));   % r2 (wall) in [1.3*r1, r1+0.95x]
+        r_eff = r2v - r1;   % pin-centre's effective arc radius (drives kinematics)
         Lv  = sld_L.Value;
         Lcv = min(sld_Lc.Value, Lv);
         bv  = sld_b.Value;
@@ -166,7 +179,7 @@ redraw();
 
         updLabel(lbl_x,   'x',   xv);
         updLabel(lbl_a,   'a',   av);
-        updLabel(lbl_r1,  'r1',  r1v);
+        updLabel(lbl_r2,  'r2',  r2v);
         updLabel(lbl_L,   'L',   Lv);
         updLabel(lbl_Lc,  'Lc',  Lcv);
         updLabel(lbl_b,   'b',   bv);
@@ -179,8 +192,8 @@ redraw();
         phir = deg2rad(phi);
         P    = [av - xv*cos(phir),  xv*sin(phir)];
 
-        %% Teardrop arm angle
-        theta_d = td_theta(phi, xv, av, r1v);
+        %% Teardrop arm angle — driven by the pin CENTRE's path (r_eff), not the wall (r2v)
+        theta_d = td_theta(phi, xv, av, r_eff);
         theta_r = deg2rad(theta_d);
         arm_dir = [cos(theta_r),  sin(theta_r)];   % F → slot / crank side
         pad_dir = -arm_dir;                         % F → paddle tip
@@ -199,22 +212,44 @@ redraw();
         py   = [F(2)+h*perp(2), tip(2)+h*perp(2), tip(2)-h*perp(2), F(2)-h*perp(2)];
         set(hPaddle, 'XData',px, 'YData',py);
 
-        %% Teardrop slot outline in body frame → world frame
-        ys = av - xv;   % bottom of teardrop (body Y' = a-x)
-        if r1v < 1e-4
-            % Degenerate straight slot: draw centreline as 2-pt patch (line)
+        %% Actual slot wall outline in body frame → world frame
+        % The pin-centre path (radius r_eff, apex at a+x) is first built exactly as
+        % before, then scaled outward by k=r2v/r_eff about the arc centre (0,ci) to
+        % get the real wall the pin (radius r1) rides inside — concentric r2v arc,
+        % same tangent angles, apex pushed out past a+x to leave clearance for r1.
+        % The far tip is NOT left as a sharp point either: at phi=180 the pin
+        % centre sits exactly at (0,a+x), tangent to both wall lines at once (a
+        % ball wedged in a V) — so the tip is capped with its own r1 fillet.
+        ys = av - xv;   % bottom of pin-centre arc (body Y' = a-x)
+        if r_eff < 1e-4
+            % Degenerate: essentially straight slot; fall back to centreline
             sx = [ys*(cos(theta_r)),  apex(1)];
             sy = [ys*(sin(theta_r)),  apex(2)];
         else
-            ci  = ys + r1v;
-            Di  = 2*xv - r1v;
-            Txi = r1v * sqrt(max(0, Di^2 - r1v^2)) / Di;
-            Tyi = ci + r1v^2 / Di;
+            ci  = ys + r_eff;
+            Di  = 2*xv - r_eff;
+            Txi = r_eff * sqrt(max(0, Di^2 - r_eff^2)) / Di;
+            Tyi = ci + r_eff^2 / Di;
             thR = atan2(Tyi - ci, Txi);
-            aa  = linspace(thR, -pi - thR, 120);
-            % Body-frame outline (X' perpendicular, Y' along arm from F)
-            bX  = [0,    Txi, r1v*cos(aa),    -Txi, 0    ];
-            bY  = [av+xv, Tyi, ci+r1v*sin(aa), Tyi, av+xv];
+
+            k      = r2v / r_eff;            % pin-centre path -> actual wall
+            Txw    = Txi * k;
+            Tyw    = ci + (Tyi - ci) * k;
+            apex_w = ci + (av + xv - ci) * k;
+
+            % Tip fillet: circle of radius r1, centred on the axis, tangent to
+            % both wall lines (same constant line-normal (Txw,Tyw-ci)/r2v used
+            % at the near-pivot tangent point applies everywhere on the line)
+            Yc  = apex_w - r1 * r2v / (Tyw - ci);
+            Txf = r1 * Txw / r2v;
+            Tyf = Yc + r1 * (Tyw - ci) / r2v;
+
+            aa_big = linspace(thR, -pi - thR, 120);   % near-pivot r2v arc
+            aa_tip = linspace(pi - thR, thR, 40);     % far-tip r1 fillet
+
+            % Body-frame wall outline: near-pivot arc, (implicit line), tip fillet, (implicit line, closes)
+            bX  = [r2v*cos(aa_big),    r1*cos(aa_tip)   ];
+            bY  = [ci+r2v*sin(aa_big), Yc+r1*sin(aa_tip)];
             % Rotate to world frame
             sx  = bY*cos(theta_r) - bX*sin(theta_r);
             sy  = bY*sin(theta_r) + bX*cos(theta_r);
@@ -223,7 +258,7 @@ redraw();
 
         %% Alpha (max paddle angle) via phi sweep — used for bag fill
         ps   = 0:5:360;
-        ts   = arrayfun(@(p) td_theta(p, xv, av, r1v), ps);
+        ts   = arrayfun(@(p) td_theta(p, xv, av, r_eff), ps);
         ad   = max(ts);
         gd   = ad * bv / max(1e-9, 1-bv);
         den  = max(eps, ad + gd);
@@ -239,6 +274,7 @@ redraw();
         set(hFulc,   'XData', F(1),  'YData', F(2));
         set(hCC,     'XData', C(1),  'YData', C(2));
         set(hPin,    'XData', P(1),  'YData', P(2));
+        set(hPinCirc,'XData', P(1)+r1*cos(ang60), 'YData', P(2)+r1*sin(ang60));
 
         %% Bags
         ar    = deg2rad(ad);
@@ -256,7 +292,7 @@ redraw();
 
         %% Power curve
         phi_v   = (0:2:360)';
-        th_v    = arrayfun(@(p) td_theta(p, xv, av, r1v), phi_v);
+        th_v    = arrayfun(@(p) td_theta(p, xv, av, r_eff), phi_v);
         dth_v   = gradient(th_v, phi_v) * omega_gb;     % rad/s
         fast_ej = (th_v > -gd) & (dth_v > 0);          % fast stroke (phi~0, dtheta>0)
         slow_ej = (th_v <  gd) & (dth_v < 0);          % slow stroke (phi~180, dtheta<0)

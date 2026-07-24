@@ -8,21 +8,28 @@
 % of P_elec_peak entirely (P_mech = Tg*omega_gb/(e_gb*e_mech), and
 % omega_motor = omega_gb*GR while Tm = Tg/(GR*e_gb*e_mech)). No time-domain
 % simulation needed. Mirrors the physics in paddle_angle_plot.m
-% (Tp, Tg, Tm/P_elec sections), peak occurring at phi=0 (LV ejection start).
+% (Tp, Tg, Tm/P_elec sections). Peak occurs at phi=0 (fast stroke, factor
+% x/(a-x)) or phi=180 (slow stroke, factor x/(a+x)) depending on which
+% ventricle's pressure lands on the faster stroke — see lv_fast.
 
 clear; clc;
 
 %% Fixed parameters (match paddle_angle_plot.m)
-rpm_max = 145;
-b       = 0.5;
-p_bag   = 16e3;
-F_e     = 10;
-e_gb    = 0.90;
-e_mech  = 0.72;
-e_motor = 0.83;
+rpm_max   = 145;
+b         = 0.5;
+p_LV_mmHg = 120;     % LV peak bag pressure, mmHg
+p_RV_mmHg = 25;      % RV peak bag pressure, mmHg
+mmHg2Pa   = 133.322;
+p_LV      = p_LV_mmHg * mmHg2Pa;   % Pa
+p_RV      = p_RV_mmHg * mmHg2Pa;   % Pa
+lv_fast   = false;   % true → LV on quick-return stroke; false → LV on slow stroke
+F_e       = 10;
+e_gb      = 0.90;
+e_mech    = 0.72;
+e_motor   = 0.83;
 
 omega_gb  = 2*pi*rpm_max/60;
-CO_target = 5;       % L/min per ventricle
+CO_target = 6;       % L/min per ventricle
 P_max     = 15.6;    % W  (power budget, see tbh27_mechanism_archived.m)
 alpha_min = 20;      % deg, paddle swing floor
 
@@ -36,7 +43,7 @@ A  = [1 -1  0 0 0;
       0  0 -1 0 1];
 bb = [-1; 0];
 
-objective = @(v) p_elec_peak(v, omega_gb, e_gb, e_mech, e_motor, p_bag, F_e);
+objective = @(v) p_elec_peak(v, omega_gb, e_gb, e_mech, e_motor, p_LV, p_RV, lv_fast, F_e);
 nonlcon   = @(v) constraints(v, b, rpm_max, CO_target, alpha_min);
 
 opts = optimoptions('fmincon','Display','iter','Algorithm','sqp');
@@ -58,6 +65,13 @@ fprintf('  ---------------------------------------\n');
 fprintf('  alpha       = %.2f deg  (floor %.0f)\n', alpha, alpha_min);
 fprintf('  CO          = %.3f L/min/ventricle  (target %.1f)\n', CO, CO_target);
 fprintf('  P_elec_peak = %.3f W  (budget %.1f)  -> %s\n', P_opt, P_max, verdict{(P_opt<=P_max)+1});
+fprintf('  ---------------------------------------\n');
+if lv_fast
+    fprintf('  LV assignment: fast stroke (phi~0, high QR torque)\n');
+else
+    fprintf('  LV assignment: slow stroke (phi~180, lower peak torque)\n');
+end
+fprintf('  p_LV = %g mmHg  |  p_RV = %g mmHg\n', p_LV_mmHg, p_RV_mmHg);
 fprintf('\n');
 fprintf('  NOTE: x and a affect CO and P_elec_peak only via x/a = sin(alpha).\n');
 fprintf('        With alpha pinned at the floor, x and a are not individually\n');
@@ -65,13 +79,20 @@ fprintf('        unique -- any pair within bounds satisfying x/a = sin(alpha)\n'
 fprintf('        gives the same CO and P_elec_peak.\n');
 
 %% ===================================================================
-function P = p_elec_peak(v, omega_gb, e_gb, e_mech, e_motor, p_bag, F_e)
+function P = p_elec_peak(v, omega_gb, e_gb, e_mech, e_motor, p_LV, p_RV, lv_fast, F_e)
     [x, a, L, w, Lc] = unpack(v);
     A_contact = w * Lc * 1e-6;               % m^2
-    F_total   = p_bag * A_contact + F_e;     % N
     r_moment  = (L - Lc/2) * 1e-3;           % m
-    Tp        = F_total * r_moment;          % N.m
-    Tg_peak   = x/(a-x) * Tp;                % gearbox torque at phi=0 (LV peak)
+    peak_fast = x/(a-x);                     % dtheta/dphi at phi=0   (fast stroke)
+    peak_slow = x/(a+x);                     % dtheta/dphi at phi=180 (slow stroke)
+    if lv_fast
+        F_fast = p_LV * A_contact + F_e;
+        F_slow = p_RV * A_contact + F_e;
+    else
+        F_fast = p_RV * A_contact + F_e;
+        F_slow = p_LV * A_contact + F_e;
+    end
+    Tg_peak   = max(F_fast * peak_fast, F_slow * peak_slow) * r_moment;   % N.m
     P_mech    = Tg_peak * omega_gb / (e_gb*e_mech);   % GR cancels
     P = P_mech / e_motor;
 end

@@ -2,23 +2,33 @@
 %
 % Mirror of paddle_angle_plot.m for the teardrop-slot mechanism variant.
 % The near-pivot end of the radial slot is replaced by a circular arc of
-% radius r1, reducing the quick-return ratio.
+% radius r2, reducing the quick-return ratio.
 %
 % theta(phi) is computed numerically (no closed form for the teardrop).
 % Ejection windows are found by numerical inversion of theta(phi).
 % All torque/powpower er formulas are otherwise identical to paddle_angle_plot.m.
 %
 % KEY PARAMETERS TO TUNE:
-%   r1        — teardrop arc radius (mm); 0 → straight slot, must be < x
+%   r2        — teardrop (wall) radius (mm); must be >= r1 and r_eff=r2-r1 < x
+%   r1        — crank pin radius (mm, fixed); physical floor for r2
 %   b         — geometric bag overlap [0, 0.5]
 %   L, w, L_contact — paddle geometry (mm)
+%
+% The pin's CENTRE doesn't ride on the wall itself -- it stays a constant
+% distance r1 inside it. So the kinematics (theta(phi)) are driven by the
+% effective arc radius r_eff = r2 - r1 (the pin centre's own path), not r2
+% directly. r2 = r1 (smallest wall that can even contain the pin) gives
+% r_eff = 0 -- i.e. zero teardrop effect, identical to the pure straight
+% slot; any real quick-return benefit needs r2 > r1.
 
 clear; clc; close all;
 
 %% Mechanism parameters
-x   = 7;    % Crank arm length, mm
-a   = 17;     % Crank centre to fulcrum distance, mm
-r1  = 1.3;   % Teardrop arc radius, mm  (= 0.2x; set 0 for straight slot)
+x     = 7;    % Crank arm length, mm
+a     = 17;     % Crank centre to fulcrum distance, mm
+r1    = 2;    % Crank pin radius, mm (fixed) — physical floor for r2
+r2    = 2*r1; % Teardrop (wall) radius, mm  (gives r_eff = r1 at this default)
+r_eff = r2 - r1;   % pin-centre's effective arc radius — drives the kinematics
 
 rpm_max  = 145;
 T        = 60 / rpm_max;
@@ -26,7 +36,7 @@ omega_gb = 2*pi / T;
 
 b = 0.5;   % Bag overlap [0, 0.5]: fill at theta=0 is (1-b)*100%
 
-lv_fast = true;   % true → LV on quick-return (fast) stroke near phi=0
+lv_fast = false;   % true → LV on quick-return (fast) stroke near phi=0
                   % false → LV on slow stroke near phi=180 (lower peak torque)
 
 %% Paddle geometry — tune these
@@ -51,7 +61,7 @@ e_motor   = 0.83;   % Motor efficiency
 
 %% Fine phi sweep (one cycle) — basis for all kinematics
 phi_fine        = linspace(0, 360, 1441);   % 0.25 deg resolution
-theta_fine      = teardrop_theta(phi_fine, x, a, r1);
+theta_fine      = teardrop_theta(phi_fine, x, a, r_eff);
 dth_dphi_fine   = gradient(theta_fine, phi_fine);   % dθ/dφ, deg/deg (= rad/rad)
 
 % Kinematic derived quantities
@@ -75,6 +85,18 @@ phi_RV_start = interp1(fliplr(th_dn), fliplr(ph_dn), gamma);   % flip: th_dn is 
 % Stroke volume & CO
 SV = K_geom * alpha * pi/180 / (1000 * (1-b));   % mL per ventricle
 CO = 2 * SV * rpm_max / 1000;                    % L/min combined
+
+% Baseline (r2 = r1): the smallest buildable wall, giving r_eff = 0 -- i.e.
+% zero teardrop effect, identical to the pure straight slot. Used as the
+% reference in place of the unbuildable r_eff=0-via-r2=0 "straight slot".
+r2_min           = r1;
+theta_base       = teardrop_theta(phi_fine, x, a, r2_min - r1);
+dth_dphi_base    = gradient(theta_base, phi_fine);
+[alpha_base, ipk_base] = max(theta_base);
+phi_pk_base      = phi_fine(ipk_base);
+peak_fast_base   = max(dth_dphi_base);     % dth/dphi at fast stroke (phi~0)
+peak_slow_base   = max(-dth_dphi_base);    % dth/dphi at slow stroke (phi~180)
+qr_base          = peak_fast_base / peak_slow_base;
 
 %% Time domain — 2 cycles
 N         = 2000;
@@ -213,10 +235,10 @@ grid on; xlim([0 2*T*1000]); ylim([0, max(Q_total)*1.25]);
 ax3.FontSize = 10;
 
 annotation('textbox',[0.72 0.35 0.26 0.28],'String',{
-    sprintf('x = %g mm  |  a = %g mm  |  r1 = %g mm', x, a, r1),
-    sprintf('\\phi_{peak} = %.1f°  (straight slot: %.1f°)', phi_pk, acosd(x/a)),
-    sprintf('\\alpha = %.1f°  (straight slot: %.1f°)', alpha, asind(x/a)),
-    sprintf('QR ratio = %.3f  (straight: %.3f)', qr_ratio, (a+x)/(a-x)),
+    sprintf('x = %g mm  |  a = %g mm  |  r2 = %g mm  (r1 = %g mm)', x, a, r2, r1),
+    sprintf('\\phi_{peak} = %.1f°  (r2=r1: %.1f°)', phi_pk, phi_pk_base),
+    sprintf('\\alpha = %.1f°  (r2=r1: %.1f°)', alpha, alpha_base),
+    sprintf('QR ratio = %.3f  (r2=r1: %.3f)', qr_ratio, qr_base),
     sprintf('Overlap b = %.2f  |  \\gamma = %.1f°', b, gamma),
     sprintf('─────────────────────'),
     sprintf('L = %g mm  |  w = %g mm  |  t = %g mm', L, w, t_paddle),
@@ -404,14 +426,14 @@ if lv_fast
 else
     fprintf('  LV assignment:            slow stroke (phi~180°, lower peak torque)\n');
 end
-fprintf('  r1 = %.2f mm  (%.0f%% of x)\n', r1, 100*r1/x);
-fprintf('  Max paddle angle:         +/-%.2f deg  (straight slot: +/-%.2f)\n', alpha, asind(x/a));
-fprintf('  Crank angle at max:       %.1f deg  (straight slot: %.1f)\n', phi_pk, acosd(x/a));
-fprintf('  Quick-return ratio:       %.3f  (straight slot: %.3f)\n', qr_ratio, (a+x)/(a-x));
+fprintf('  r2 = %.2f mm  (%.0f%% of x)  |  r1 = %.2f mm (pin, floor)  |  r_eff = %.2f mm\n', r2, 100*r2/x, r1, r_eff);
+fprintf('  Max paddle angle:         +/-%.2f deg  (r2=r1: +/-%.2f)\n', alpha, alpha_base);
+fprintf('  Crank angle at max:       %.1f deg  (r2=r1: %.1f)\n', phi_pk, phi_pk_base);
+fprintf('  Quick-return ratio:       %.3f  (r2=r1: %.3f)\n', qr_ratio, qr_base);
 fprintf('  Overlap b:                %.2f  |  gamma = %.1f deg\n', b, gamma);
 fprintf('  ─────────────────────────────────────\n');
-Di_slot  = 2*x - r1;
-Tx_slot  = r1 * sqrt(max(Di_slot^2 - r1^2, 0)) / Di_slot;   % slot max half-width in body X'
+Di_slot  = 2*x - r_eff;
+Tx_slot  = r2 * sqrt(max(Di_slot^2 - r_eff^2, 0)) / Di_slot;   % actual wall half-width (not r_eff) in body X'
 fprintf('  Paddle L = %g mm  |  w = %g mm  |  t = %g mm\n', L, w, t_paddle);
 fprintf('  Slot half-width Tx:       %.2f mm  (min t_paddle for clearance = %.1f mm)\n', Tx_slot, 2*Tx_slot);
 fprintf('  Contact from tip:         %.0f mm  (r: %.0f to %g mm)\n', L_contact, L-L_contact, L);
@@ -428,9 +450,9 @@ fprintf('  F_total (RV):             %.1f N  (%.1f N pressure + %.1f N elastic)\
 fprintf('  Moment arm:               %.1f mm\n', r_moment*1000);
 fprintf('  Peak paddle torque T_p (LV): %.4f N·m\n', Tp_mag_LV);
 fprintf('  Peak paddle torque T_p (RV): %.4f N·m\n', Tp_mag_RV);
-fprintf('  Peak T_g (LV):           %.4f N·m  (straight slot: %.4f)\n', max(Tg_LV), x/(a-x)*Tp_mag_LV);
-fprintf('  Peak T_g (RV):           %.4f N·m  (straight slot: %.4f)\n', max(Tg_RV), x/(a+x)*Tp_mag_RV);
-fprintf('  T_g ratio LV/RV:         %.3f  (straight slot: %.3f)\n', max(Tg_LV)/max(Tg_RV), (a+x)/(a-x));
+fprintf('  Peak T_g (LV):           %.4f N·m  (r2=r1: %.4f)\n', max(Tg_LV), peak_fast_base*Tp_mag_LV);
+fprintf('  Peak T_g (RV):           %.4f N·m  (r2=r1: %.4f)\n', max(Tg_RV), peak_slow_base*Tp_mag_RV);
+fprintf('  T_g ratio LV/RV:         %.3f  (r2=r1: %.3f)\n', max(Tg_LV)/max(Tg_RV), qr_base);
 fprintf('  ─────────────────────────────────────\n');
 fprintf('  GR = %g  |  e_gb = %.2f  |  e_mech = %.2f  |  e_motor = %.2f\n', GR, e_gb, e_mech, e_motor);
 fprintf('  omega_gb:                %.2f rad/s  (%g rpm crank)\n', omega_gb, rpm_max);
@@ -442,21 +464,23 @@ fprintf('  Mean P_elec:             %.3f W\n', mean(P_elec));
 fprintf('  Cycle period T:           %.2f ms\n', T*1000);
 
 %% ================================================================
-function theta = teardrop_theta(phi_deg, x, a, r1)
+function theta = teardrop_theta(phi_deg, x, a, r_arc)
 % theta(phi) for the teardrop-slot mechanism (vectorised).
-% r1=0 recovers the straight-slot formula atand(x*sind / (a - x*cosd)).
+% r_arc=0 recovers the straight-slot formula atand(x*sind / (a - x*cosd)).
+% r_arc is the pin CENTRE's effective arc radius (r_eff = r2 - r1), not the
+% wall's own radius r2 -- see header comment.
     theta_o = atand(x*sind(phi_deg) ./ (a - x*cosd(phi_deg)));
-    if r1 < 1e-9
+    if r_arc < 1e-9
         theta = theta_o;  return;
     end
     y  = a - x;
-    ci = y + r1;
-    Di = 2*x - r1;
+    ci = y + r_arc;
+    Di = 2*x - r_arc;
     if Di <= 0
         theta = theta_o;  return;
     end
-    Tx  = r1 * sqrt(max(Di^2 - r1^2, 0)) / Di;
-    Ty  = ci + r1^2 / Di;
+    Tx  = r_arc * sqrt(max(Di^2 - r_arc^2, 0)) / Di;
+    Ty  = ci + r_arc^2 / Di;
     R_T = hypot(Tx, Ty);
 
     R    = sqrt(a^2 + x^2 - 2*a*x*cosd(phi_deg));
@@ -464,15 +488,15 @@ function theta = teardrop_theta(phi_deg, x, a, r1)
     sgn  = ones(size(phi_deg));
     sgn(phi_deg > 180) = -1;
 
-    % Arc branch: pin rides the r1 arc (R <= R_T, near phi=0/360)
+    % Arc branch: pin centre rides the r_arc arc (R <= R_T, near phi=0/360)
     arc = R <= R_T;
     if any(arc)
-        Yp = (R(arc).^2 - r1^2 + ci^2) / (2*ci);
+        Yp = (R(arc).^2 - r_arc^2 + ci^2) / (2*ci);
         Xp = sqrt(max(R(arc).^2 - Yp.^2, 0));
         beta(arc) = atan2d(sgn(arc).*Xp, Yp);
     end
 
-    % Tangent-line branch: pin rides the straight slot wall (R > R_T)
+    % Tangent-line branch: pin centre rides the straight path (R > R_T)
     lin = ~arc;
     if any(lin)
         Ay  = a + x;
