@@ -20,6 +20,12 @@
 % directly. r2 = r1 (smallest wall that can even contain the pin) gives
 % r_eff = 0 -- i.e. zero teardrop effect, identical to the pure straight
 % slot; any real quick-return benefit needs r2 > r1.
+%
+% t_paddle affects SV/CO (not the flow-rate curves): the paddle's own body
+% over the contact zone is a solid wedge (w*t_paddle*L_contact) that
+% permanently occupies housing volume the bag could otherwise fill -- a
+% static displacement, independent of stroke angle -- subtracted directly
+% from the swept (zero-thickness-blade) stroke volume.
 
 clear; clc; close all;
 
@@ -43,7 +49,7 @@ lv_fast = false;   % true → LV on quick-return (fast) stroke near phi=0
 L         = 39;    % Paddle length (radial extent from pivot), mm
 w         = 70;      % Paddle width (out of plane), mm
 t_paddle  = 6;       % Paddle thickness (perpendicular to arm in mechanism plane), mm
-L_contact = 36;      % Contact length from tip of paddle, mm
+L_contact = 32.5;      % Contact length from tip of paddle, mm
 
 K_geom = w * (L^2 - (L - L_contact)^2) / 2;   % dV/dtheta, mm³/rad
 
@@ -83,8 +89,14 @@ ph_dn        = phi_fine(seg_dn);
 phi_RV_start = interp1(fliplr(th_dn), fliplr(ph_dn), gamma);   % flip: th_dn is decreasing
 
 % Stroke volume & CO
-SV = K_geom * alpha * pi/180 / (1000 * (1-b));   % mL per ventricle
-CO = 2 * SV * rpm_max / 1000;                    % L/min combined
+% The paddle's own body (over the contact zone) is a solid wedge that
+% permanently occupies housing volume the bag could otherwise fill --
+% a static displacement, independent of stroke angle -- so it's
+% subtracted directly from the swept (zero-thickness-blade) volume.
+V_paddle = w * t_paddle * L_contact / 1000;      % mL — paddle's own displaced volume
+SV_gross = K_geom * alpha * pi/180 / (1000 * (1-b));   % mL per ventricle, zero-thickness ideal
+SV       = max(0, SV_gross - V_paddle);                % mL per ventricle, thickness-corrected
+CO       = 2 * SV * rpm_max / 1000;                    % L/min combined
 
 % Baseline (r2 = r1): the smallest buildable wall, giving r_eff = 0 -- i.e.
 % zero teardrop effect, identical to the pure straight slot. Used as the
@@ -123,7 +135,9 @@ else
     sign_lv = -1;         sign_rv = +1;
 end
 
-% Flow rate
+% Flow rate (NOTE: uses K_geom directly, so these do NOT reflect the
+% t_paddle displaced-volume correction applied to SV/CO below -- integrating
+% Q_LV over its ejection window gives SV_gross, not the corrected SV)
 Q_LV    = max(0,  sign_lv * dtheta_dt_rad) .* double(lv_mask) * K_geom / 1000;   % mL/s
 Q_RV    = max(0,  sign_rv * dtheta_dt_rad) .* double(rv_mask) * K_geom / 1000;
 Q_total = Q_LV + Q_RV;
@@ -243,7 +257,7 @@ annotation('textbox',[0.72 0.35 0.26 0.28],'String',{
     sprintf('─────────────────────'),
     sprintf('L = %g mm  |  w = %g mm  |  t = %g mm', L, w, t_paddle),
     sprintf('L_{contact} = %g mm from tip', L_contact),
-    sprintf('SV = %.1f mL / ventricle', SV),
+    sprintf('SV = %.1f mL / ventricle  (%.1f mL before t_{paddle}, -%.1f mL displaced)', SV, SV_gross, V_paddle),
     sprintf('CO = %.2f L/min / ventricle', SV * rpm_max / 1000),
     sprintf('CO = %.2f L/min (combined)', CO)}, ...
     'FitBoxToText','on','BackgroundColor','w','EdgeColor',[.5 .5 .5],'FontSize',8.5);
@@ -518,7 +532,8 @@ fprintf('  Paddle L = %g mm  |  w = %g mm  |  t = %g mm\n', L, w, t_paddle);
 fprintf('  Slot half-width Tx:       %.2f mm  (min t_paddle for clearance = %.1f mm)\n', Tx_slot, 2*Tx_slot);
 fprintf('  Contact from tip:         %.0f mm  (r: %.0f to %g mm)\n', L_contact, L-L_contact, L);
 fprintf('  K_geom:                   %.0f mm3/rad\n', K_geom);
-fprintf('  Stroke volume/ventricle:  %.1f mL\n', SV);
+fprintf('  Paddle displaced volume:  %.1f mL  (w*t_paddle*L_contact, static)\n', V_paddle);
+fprintf('  Stroke volume/ventricle:  %.1f mL  (%.1f mL before t_paddle)\n', SV, SV_gross);
 fprintf('  Peak LV flow:             %.1f mL/s\n', max(Q_LV));
 fprintf('  Peak RV flow:             %.1f mL/s\n', max(Q_RV));
 fprintf('  Combined cardiac output:  %.2f L/min\n', CO);
