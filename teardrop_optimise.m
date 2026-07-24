@@ -1,7 +1,8 @@
 %% Teardrop Paddle / Mechanism Geometry Optimiser
 %
 % Minimises  size_weight*(a + L) + lambda * kink
-% subject to:  CO = CO_target,  alpha >= alpha_min,  P_elec_peak <= P_max.
+% subject to:  CO = CO_target,  alpha >= alpha_min,  P_elec_peak <= P_max,
+%              QR_min <= QR ratio <= QR_max.
 %
 % Power is a hard constraint (budget), not the primary objective.
 % The optimizer trades the power headroom for smaller mechanism dimensions.
@@ -39,6 +40,8 @@ omega_gb  = 2*pi*rpm_max/60;
 CO_target = 6;       % L/min per ventricle
 P_max     = 15.6;    % W power budget
 alpha_min          = 8;   % deg — floor for teardrop (≤8° pushes Lc to its 50mm bound)
+QR_min             = 1.0; % lower bound on quick-return ratio (peak fast-stroke / slow-stroke rate)
+QR_max             = 2.0; % upper bound on quick-return ratio
 L_paddle_pin_radius = 3;  % mm — inner edge of contact zone must clear the pivot pin
 t_paddle            = 4;  % mm — paddle body thickness (perpendicular to arm in mechanism plane)
 r1                  = 2;  % mm — crank pin radius (fixed); r2 cannot be smaller than this
@@ -61,7 +64,7 @@ bb = [-1; -L_paddle_pin_radius];
 
 objective = @(v) size_weight * (v(2) + v(4)) + lambda * kink_penalty(v, phi_deg, r1);
 nonlcon   = @(v) nlcon(v, b, rpm_max, CO_target, alpha_min, phi_deg, ...
-                       omega_gb, e_gb, e_mech, e_motor, p_LV, p_RV, lv_fast, F_e, P_max, r1);
+                       omega_gb, e_gb, e_mech, e_motor, p_LV, p_RV, lv_fast, F_e, P_max, r1, QR_min, QR_max);
 
 %% Multi-start seeds
 v0_list = {
@@ -126,7 +129,7 @@ fprintf('  w         = %.3f mm\n', wo);
 fprintf('  L_contact = %.3f mm\n', Lco);
 fprintf('  -----------------------------------------\n');
 fprintf('  alpha       = %.2f deg  (floor %.0f)\n', alpha_o, alpha_min);
-fprintf('  QR ratio    = %.3f\n', qr_o);
+fprintf('  QR ratio    = %.3f  (bounds [%.1f, %.1f])\n', qr_o, QR_min, QR_max);
 fprintf('  CO          = %.3f L/min/ventricle  (target %.1f)\n', co_o, CO_target);
 fprintf('  P_elec_peak = %.3f W  (%s)\n', P_elec_o, s_td);
 fprintf('  kink        = %.4f deg/deg\n', kink_o);
@@ -176,12 +179,14 @@ function CO = co_calc(v, b, rpm_max, phi_deg, r1)
 end
 
 function [c, ceq] = nlcon(v, b, rpm_max, CO_target, alpha_min, phi_deg, ...
-                          omega_gb, e_gb, e_mech, e_motor, p_LV, p_RV, lv_fast, F_e, P_max, r1)
+                          omega_gb, e_gb, e_mech, e_motor, p_LV, p_RV, lv_fast, F_e, P_max, r1, QR_min, QR_max)
     [x, a, f, ~, ~, ~] = unpack(v);
     r2    = f * x;
     r_eff = r2 - r1;
     theta = teardrop_theta(phi_deg, x, a, r_eff);
+    dth   = gradient(theta, phi_deg);
     alpha = max(theta);
+    QR    = max(dth) / max(-dth);
     CO    = co_calc(v, b, rpm_max, phi_deg, r1);
     P     = p_elec_peak(v, omega_gb, e_gb, e_mech, e_motor, p_LV, p_RV, lv_fast, F_e, phi_deg, r1);
     ceq   = [];
@@ -189,7 +194,9 @@ function [c, ceq] = nlcon(v, b, rpm_max, CO_target, alpha_min, phi_deg, ...
              CO - 1.0*CO_target;
              1.0*CO_target - CO;
              P - P_max;
-             r1 - r2];
+             r1 - r2;
+             QR_min - QR;
+             QR - QR_max];
 end
 
 function k = kink_penalty(v, phi_deg, r1)

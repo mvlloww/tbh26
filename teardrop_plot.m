@@ -26,8 +26,8 @@ clear; clc; close all;
 %% Mechanism parameters
 x     = 7;    % Crank arm length, mm
 a     = 17;     % Crank centre to fulcrum distance, mm
-r1    = 2;    % Crank pin radius, mm (fixed) — physical floor for r2
-r2    = 2*r1; % Teardrop (wall) radius, mm  (gives r_eff = r1 at this default)
+r1    = 2.23;    % Crank pin radius, mm (fixed) — physical floor for r2
+r2    = 2.85; % Teardrop (wall) radius, mm  (gives r_eff = r1 at this default)
 r_eff = r2 - r1;   % pin-centre's effective arc radius — drives the kinematics
 
 rpm_max  = 145;
@@ -40,9 +40,9 @@ lv_fast = false;   % true → LV on quick-return (fast) stroke near phi=0
                   % false → LV on slow stroke near phi=180 (lower peak torque)
 
 %% Paddle geometry — tune these
-L         = 40;    % Paddle length (radial extent from pivot), mm
+L         = 39;    % Paddle length (radial extent from pivot), mm
 w         = 70;      % Paddle width (out of plane), mm
-t_paddle  = 4;       % Paddle thickness (perpendicular to arm in mechanism plane), mm
+t_paddle  = 6;       % Paddle thickness (perpendicular to arm in mechanism plane), mm
 L_contact = 36;      % Contact length from tip of paddle, mm
 
 K_geom = w * (L^2 - (L - L_contact)^2) / 2;   % dV/dtheta, mm³/rad
@@ -418,6 +418,86 @@ title('Crank Angle vs Paddle Angle — Teardrop Slot Kinematics','FontSize',12);
 legend({'LV ejection','RV ejection','Paddle angle'},'Location','northeast');
 grid on; xlim([0 360]); ylim([-alpha*1.3, alpha*1.3]);
 xticks(0:45:360);
+
+%% ================================================================
+%  Figure 4: Slot Geometry & Crank Pin — static check
+%% ================================================================
+% Snapshots one crank angle (no animation) and draws the ACTUAL slot wall
+% (not the pin-centre path) plus the pin's full circular path, so the
+% r1/r2 geometry can be checked visually. phi_static=0 nests the pin in
+% the near-pivot arc, mirroring the reference sketch used to derive this.
+phi_static     = 0;    % crank angle to snapshot, deg
+theta_static   = teardrop_theta(phi_static, x, a, r_eff);
+theta_static_r = deg2rad(theta_static);
+
+F = [0, 0];
+C = [a, 0];
+P = [a - x*cosd(phi_static), x*sind(phi_static)];
+
+% Slot wall outline (body frame -> world frame): pin-centre path (r_eff,
+% apex at a+x) scaled outward by k=r2/r_eff about the arc centre, far tip
+% capped with its own r1 fillet -- same construction as teardrop_viz.m
+ys  = a - x;
+ci  = ys + r_eff;
+Di  = 2*x - r_eff;
+Txi = r_eff * sqrt(max(0, Di^2 - r_eff^2)) / Di;
+Tyi = ci + r_eff^2 / Di;
+thR = atan2(Tyi - ci, Txi);
+
+k      = r2 / r_eff;
+Txw    = Txi * k;
+Tyw    = ci + (Tyi - ci) * k;
+apex_w = ci + (a + x - ci) * k;
+
+Yc  = apex_w - r1 * r2 / (Tyw - ci);
+Txf = r1 * Txw / r2;
+Tyf = Yc + r1 * (Tyw - ci) / r2;
+
+aa_big = linspace(thR, -pi - thR, 200);   % near-pivot r2 arc
+aa_tip = linspace(pi - thR, thR, 60);     % far-tip r1 fillet
+
+bX = [r2*cos(aa_big),    r1*cos(aa_tip)   ];
+bY = [ci+r2*sin(aa_big), Yc+r1*sin(aa_tip)];
+
+slot_X = bY*cos(theta_static_r) - bX*sin(theta_static_r);
+slot_Y = bY*sin(theta_static_r) + bX*cos(theta_static_r);
+
+arm_dir = [cos(theta_static_r), sin(theta_static_r)];   % F -> slot apex direction
+apex_pt = F + (a + x) * arm_dir;
+
+figure('Name','Teardrop Slot Geometry — Static Check','Color','w','Position',[160 160 620 650]);
+hold on;
+
+ang = linspace(0, 2*pi, 200);
+h1 = plot(C(1)+x*cos(ang), C(2)+x*sin(ang), 'b:', 'LineWidth', 1.2);                 % pin's circular path
+h2 = plot([F(1) C(1)], [F(2) C(2)], 'k:', 'LineWidth', 0.8);                        % neutral axis F->C
+h3 = plot([C(1) P(1)], [C(2) P(2)], 'b-', 'LineWidth', 2);                          % crank throw arm
+h4 = plot([F(1) apex_pt(1)], [F(2) apex_pt(2)], '-', 'Color', [0.6 0.6 0.6], 'LineWidth', 3);  % arm centreline
+h5 = fill(slot_X, slot_Y, [0.35 0.75 0.35], 'FaceAlpha', 0.35, 'EdgeColor', [0.15 0.55 0.15], 'LineWidth', 1.5); % slot wall
+h6 = fill(P(1)+r1*cos(ang), P(2)+r1*sin(ang), [1.00 0.85 0.10], 'FaceAlpha', 0.85, 'EdgeColor', [0.55 0.40 0], 'LineWidth', 1.2); % pin, actual size
+plot(F(1), F(2), 'ko', 'MarkerFaceColor', 'k', 'MarkerSize', 8, 'HandleVisibility', 'off');
+plot(C(1), C(2), 'ko', 'MarkerFaceColor', [0.2 0.2 0.8], 'MarkerSize', 8, 'HandleVisibility', 'off');
+text(F(1)-2, F(2)-4, 'F (pivot)', 'FontSize', 8);
+text(C(1)+1, C(2)-4, 'C (crank centre)', 'FontSize', 8);
+
+axis equal; grid on;
+xlabel('mm'); ylabel('mm');
+title(sprintf('Slot Wall & Crank Pin at \\phi=%.0f°  (static check)', phi_static));
+legend([h1 h2 h3 h4 h5 h6], {'Pin path (radius x)','Neutral axis','Crank arm', ...
+    'Arm centreline','Slot wall (r2, r1-filleted)','Crank pin (actual size, r1)'}, ...
+    'Location','southoutside','NumColumns',2);
+
+all_X = [C(1)+x*[-1 1], slot_X, apex_pt(1), F(1)];
+all_Y = [C(2)+x*[-1 1], slot_Y, apex_pt(2), F(2)];
+mgn   = 0.1*(a+x);
+xlim([min(all_X)-mgn, max(all_X)+mgn]);
+ylim([min(all_Y)-mgn, max(all_Y)+mgn]);
+
+annotation('textbox',[0.15 0.01 0.7 0.08], ...
+    'String', sprintf('x=%.2f mm  a=%.2f mm  r1(pin)=%.2f mm  r2(wall)=%.2f mm  r_{eff}=%.2f mm', ...
+        x, a, r1, r2, r_eff), ...
+    'FitBoxToText','on','BackgroundColor','w','EdgeColor',[.5 .5 .5],'FontSize',8.5, ...
+    'HorizontalAlignment','center');
 
 %% Console summary
 fprintf('=== Crank-and-Slotted-Arm LVAD — Teardrop Slot ===\n');
