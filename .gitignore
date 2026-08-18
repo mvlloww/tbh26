@@ -1,2 +1,5 @@
 .claude/settings.local.json
 *.asv
+__pycache__/
+MCL_DATA/
+data_log_SVR_1.csv
