@@ -2,4 +2,4 @@
 *.asv
 __pycache__/
 MCL_DATA/
-data_log_SVR_1.csv
+data_log_*.csv
