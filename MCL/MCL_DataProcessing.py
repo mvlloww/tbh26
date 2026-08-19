@@ -593,16 +593,18 @@ def main(argv=None) -> None:
     args = parse_args(argv)
     output_log = args.output_log if args.output_log is not None else Path(DEFAULT_OUTPUT_LOG)
 
-    if args.summary_plots:
-        run_summary_plots(output_log, show=not args.no_show, reference_log=args.reference_log)
-        return
-
     if args.dir is not None:
         if args.tdms is not None or args.flow_csv is not None:
             sys.exit("Error: --dir cannot be combined with --tdms/--flow-csv")
         if args.output_log is None:
             output_log = Path(f"data_log_{args.dir.resolve().name}.csv")
         run_batch(args.dir, args.group, output_log, args.tap28_plot, args.show)
+        if args.summary_plots:
+            run_summary_plots(output_log, show=not args.no_show, reference_log=args.reference_log)
+        return
+
+    if args.summary_plots:
+        run_summary_plots(output_log, show=not args.no_show, reference_log=args.reference_log)
         return
 
     if args.tdms is None and args.flow_csv is None:
