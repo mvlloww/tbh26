@@ -32,8 +32,8 @@ clear; clc; close all;
 %% Mechanism parameters
 x     = 7;    % Crank arm length, mm
 a     = 17;     % Crank centre to fulcrum distance, mm
-r1    = 2.23;    % Crank pin radius, mm (fixed) — physical floor for r2
-r2    = 2.85; % Teardrop (wall) radius, mm  (gives r_eff = r1 at this default)
+r1    = 2.25;    % Cran k pin radius, mm (fixed) — physical floor for r2
+r2    = 3.4; % Teardrop (wall) radius, mm  (gives r_eff = r1 at this default)
 r_eff = r2 - r1;   % pin-centre's effective arc radius — drives the kinematics
 
 rpm_max  = 145;
@@ -46,10 +46,10 @@ lv_fast = false;   % true → LV on quick-return (fast) stroke near phi=0
                   % false → LV on slow stroke near phi=180 (lower peak torque)
 
 %% Paddle geometry — tune these
-L         = 39;    % Paddle length (radial extent from pivot), mm
-w         = 70;      % Paddle width (out of plane), mm
-t_paddle  = 6;       % Paddle thickness (perpendicular to arm in mechanism plane), mm
-L_contact = 32.5;      % Contact length from tip of paddle, mm
+L         = 40;    % Paddle length (radial extent from pivot), mm
+w         = 75;      % Paddle width (out of plane), mm
+t_paddle  = 3;       % Paddle thickness (perpendicular to arm in mechanism plane), mm
+L_contact = 34;      % Contact length from tip of paddle, mm
 
 K_geom = w * (L^2 - (L - L_contact)^2) / 2;   % dV/dtheta, mm³/rad
 

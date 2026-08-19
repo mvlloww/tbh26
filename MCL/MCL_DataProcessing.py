@@ -50,6 +50,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from matplotlib.lines import Line2D
 from nptdms import TdmsFile
 from scipy.signal import find_peaks
 
@@ -58,6 +59,12 @@ from scipy.signal import find_peaks
 # --------------------------------------------------------------------------
 DEFAULT_GROUP_NAME = "All Data"
 DEFAULT_OUTPUT_LOG = "data_log_SVR_1.csv"
+
+# Peristaltic-pump loop characterisation (MAP/RAP/CO vs Pulse/Voltage), used
+# as a reference overlay in --summary-plots to show what the mock loop is
+# capable of independent of whichever pump is under test. From
+# MCL_testing_matrix_characterisation.xlsx ("MCL_Cheatsheeet" sheet).
+DEFAULT_REFERENCE_LOG = "MCL_reference_characterisation.csv"
 
 # 1-indexed, inclusive rows of the flow CSV's first data column to average
 FLOW_AVG_ROWS = (1000, 27000)
@@ -323,7 +330,7 @@ def process_dataset(
         print(f"Arterial compliance: {c_arterial:.4f} ml/mmHg")
         print(f"Atrial compliance: {c_atrial:.4f} ml/mmHg")
     else:
-        print("No tdms file provided — AoP/RAP/compliance/plots will be left blank")
+        print("No tdms file provided — MAP/RAP/compliance/plots will be left blank")
 
     svr = None
     if pressure2_mean is not None and pressure8_mean is not None and average_flow_value is not None:
@@ -335,7 +342,7 @@ def process_dataset(
             {
                 "Pulse": pulse,
                 "Voltage": voltage,
-                "AoP": pressure2_mean,
+                "MAP": pressure2_mean,
                 "RAP": pressure8_mean,
                 "CO": average_flow_value,
                 "SVR": svr,
@@ -347,6 +354,106 @@ def process_dataset(
     file_exists = output_log.exists()
     row.to_csv(output_log, mode="a" if file_exists else "w", header=not file_exists, index=False)
     print(f"Logged result to {output_log}")
+
+    if show:
+        plt.show()
+    else:
+        for fig in figs:
+            plt.close(fig)
+
+
+# --------------------------------------------------------------------------
+# Cross-run summary plots (flow vs BPM / voltage, from the output log)
+# --------------------------------------------------------------------------
+def plot_flow_vs(df: pd.DataFrame, x_col: str, group_col: str) -> plt.Figure:
+    """One line per unique group_col value, flow (L/min) vs x_col."""
+    fig, ax = plt.subplots(num=f"Flow rate vs {x_col}")
+    for group_value, group_df in df.groupby(group_col):
+        group_df = group_df.sort_values(x_col)
+        ax.plot(group_df[x_col], group_df["CO"] / 1000, marker="o", label=f"{group_col}={group_value}")
+    ax.set_xlabel(x_col)
+    ax.set_ylabel("Flow rate (L/min)")
+    ax.set_title(f"Flow rate vs {x_col}")
+    ax.legend()
+    fig.tight_layout()
+    return fig
+
+
+def plot_pressure_vs_bpm(df: pd.DataFrame, reference_df: pd.DataFrame | None = None) -> plt.Figure:
+    """Pressure taps 2 (MAP) & 8 (RAP) vs BPM, one line per voltage.
+
+    If reference_df is given (Pulse/Voltage/MAP/RAP columns, e.g. a
+    peristaltic-pump loop characterisation), it's overlaid as dashed lines
+    in the same per-voltage colors to show what the loop itself is capable
+    of independent of the pump under test.
+    """
+    fig, axes = plt.subplots(2, 1, num="Pressure taps 2 & 8 vs BPM", figsize=(8, 6), sharex=True)
+    voltages = sorted(set(df["Voltage"]) | (set(reference_df["Voltage"]) if reference_df is not None else set()))
+    cmap = plt.get_cmap("tab20")
+    colors = {voltage: cmap(i % 20) for i, voltage in enumerate(voltages)}
+
+    for ax, col, title in zip(axes, ["MAP", "RAP"], ["Pressure 2 (MAP)", "Pressure 8 (RAP)"]):
+        for voltage, group_df in df.groupby("Voltage"):
+            group_df = group_df.sort_values("Pulse")
+            ax.plot(group_df["Pulse"], group_df[col], marker="o", color=colors[voltage], label=f"{voltage}V")
+        if reference_df is not None:
+            for voltage, group_df in reference_df.groupby("Voltage"):
+                group_df = group_df.sort_values("Pulse")
+                ax.plot(
+                    group_df["Pulse"],
+                    group_df[col],
+                    marker="x",
+                    linestyle="--",
+                    alpha=0.6,
+                    color=colors[voltage],
+                )
+        ax.set_title(title)
+        ax.set_ylabel("Pressure (mmHg)")
+        handles, labels = ax.get_legend_handles_labels()
+        if reference_df is not None:
+            handles.append(Line2D([], [], color="gray", linestyle="--", marker="x", label="reference (peristaltic)"))
+        ax.legend(handles=handles, fontsize=7, ncol=2)
+    axes[-1].set_xlabel("Pulse (BPM)")
+    fig.tight_layout()
+    return fig
+
+
+def plot_pressure_head_vs_flow(df: pd.DataFrame) -> plt.Figure:
+    """Pressure head (MAP - RAP) vs flow rate, one line per BPM."""
+    fig, ax = plt.subplots(num="Pressure head vs flow rate")
+    for pulse, group_df in df.groupby("Pulse"):
+        group_df = group_df.sort_values("CO")
+        ax.plot(group_df["CO"] / 1000, group_df["MAP"] - group_df["RAP"], marker="o", label=f"{pulse} BPM")
+    ax.set_xlabel("Flow rate (L/min)")
+    ax.set_ylabel("Pressure head, MAP − RAP (mmHg)")
+    ax.set_title("Pressure head vs flow rate")
+    ax.legend(fontsize=7)
+    fig.tight_layout()
+    return fig
+
+
+def run_summary_plots(output_log: Path, show: bool, reference_log: Path | None = None) -> None:
+    if not output_log.exists():
+        sys.exit(f"Error: output log not found: {output_log}")
+
+    log = pd.read_csv(output_log)
+    flow_df = log.dropna(subset=["Pulse", "Voltage", "CO"])
+    pressure_df = log.dropna(subset=["Pulse", "Voltage", "MAP", "RAP"])
+    head_df = log.dropna(subset=["Pulse", "CO", "MAP", "RAP"])
+    if flow_df.empty and pressure_df.empty:
+        sys.exit(f"Error: no rows with Pulse/Voltage plus CO or MAP/RAP in {output_log}")
+
+    reference_df = None
+    if reference_log is not None and reference_log.exists():
+        reference_df = pd.read_csv(reference_log).dropna(subset=["Pulse", "Voltage", "MAP", "RAP"])
+
+    figs = []
+    if not flow_df.empty:
+        figs += [plot_flow_vs(flow_df, "Pulse", "Voltage"), plot_flow_vs(flow_df, "Voltage", "Pulse")]
+    if not pressure_df.empty:
+        figs.append(plot_pressure_vs_bpm(pressure_df, reference_df))
+    if not head_df.empty:
+        figs.append(plot_pressure_head_vs_flow(head_df))
 
     if show:
         plt.show()
@@ -420,7 +527,13 @@ def parse_args(argv=None) -> argparse.Namespace:
         "paired by BPM/voltage parsed from filenames; cannot be combined with --tdms/--flow-csv",
     )
     parser.add_argument("--group", default=DEFAULT_GROUP_NAME, help="TDMS channel group name")
-    parser.add_argument("--output-log", type=Path, default=Path(DEFAULT_OUTPUT_LOG), help="results CSV to append to")
+    parser.add_argument(
+        "--output-log",
+        type=Path,
+        default=None,
+        help="results CSV to append to (default: data_log_<dir-name>.csv in --dir mode, "
+        f"else {DEFAULT_OUTPUT_LOG})",
+    )
     parser.add_argument(
         "--voltage", type=float, default=None, help="pump drive voltage; parsed from filename if omitted"
     )
@@ -439,6 +552,19 @@ def parse_args(argv=None) -> argparse.Namespace:
         action=argparse.BooleanOptionalAction,
         default=True,
         help="show a combined Pressure 2 & 8 window per dataset (default: on; use --no-tap28-plot to disable)",
+    )
+    parser.add_argument(
+        "--summary-plots",
+        action="store_true",
+        help="plot flow rate vs BPM and vs voltage, plus pressure taps 2/8 vs BPM, from --output-log's "
+        "accumulated rows, then exit (ignores --tdms/--flow-csv/--dir)",
+    )
+    parser.add_argument(
+        "--reference-log",
+        type=Path,
+        default=Path(DEFAULT_REFERENCE_LOG),
+        help="--summary-plots only: peristaltic-pump loop characterisation CSV (Pulse/Voltage/MAP/RAP) "
+        "overlaid as a dashed reference on the pressure-vs-BPM plot; skipped if missing",
     )
     return parser.parse_args(argv)
 
@@ -465,11 +591,18 @@ def resolve_pulse_voltage(
 
 def main(argv=None) -> None:
     args = parse_args(argv)
+    output_log = args.output_log if args.output_log is not None else Path(DEFAULT_OUTPUT_LOG)
+
+    if args.summary_plots:
+        run_summary_plots(output_log, show=not args.no_show, reference_log=args.reference_log)
+        return
 
     if args.dir is not None:
         if args.tdms is not None or args.flow_csv is not None:
             sys.exit("Error: --dir cannot be combined with --tdms/--flow-csv")
-        run_batch(args.dir, args.group, args.output_log, args.tap28_plot, args.show)
+        if args.output_log is None:
+            output_log = Path(f"data_log_{args.dir.resolve().name}.csv")
+        run_batch(args.dir, args.group, output_log, args.tap28_plot, args.show)
         return
 
     if args.tdms is None and args.flow_csv is None:
@@ -487,7 +620,7 @@ def main(argv=None) -> None:
         pulse,
         voltage,
         args.group,
-        args.output_log,
+        output_log,
         show=not args.no_show,
         show_tap28=args.tap28_plot,
     )

@@ -43,8 +43,8 @@ alpha_min          = 8;   % deg — floor for teardrop (≤8° pushes Lc to its 
 QR_min             = 1.0; % lower bound on quick-return ratio (peak fast-stroke / slow-stroke rate)
 QR_max             = 2.0; % upper bound on quick-return ratio
 L_paddle_pin_radius = 3;  % mm — inner edge of contact zone must clear the pivot pin
-t_paddle            = 4;  % mm — paddle body thickness (perpendicular to arm in mechanism plane)
-r1                  = 2;  % mm — crank pin radius (fixed); r2 cannot be smaller than this
+t_paddle            = 3;  % mm — paddle body thickness (perpendicular to arm in mechanism plane)
+r1                  = 2.25;  % mm — crank pin radius (fixed); r2 cannot be smaller than this
 
 lambda      = 100;  % smoothness weight (W per deg/deg kink)
 size_weight = 0.2;  % W/mm — penalises a + L; raise to push harder for compact geometry
@@ -52,7 +52,7 @@ size_weight = 0.2;  % W/mm — penalises a + L; raise to push harder for compact
 phi_deg = linspace(0, 360, 361);   % 1-deg resolution for numerical derivatives
 
 %% Bounds  v = [x, a, f, L, w, L_contact]
-lb = [ 5,   12,  0.05, 15,    33,   5];
+lb = [ 7,   17,  0.05, 15,    33,   5];
 ub = [20,   40,  0.90, 60,   75,  50];
 
 % Linear inequalities:
